@@ -1,5 +1,8 @@
 <Solution>
+  <Folder Name="/core/">
+    <Project Path="ProCosmeticsSystem.Application/ProCosmeticsSystem.Application.csproj" />
+    <Project Path="ProCosmeticsSystem.Domain/ProCosmeticsSystem.Domain.csproj" Id="98134eb5-0148-4ace-9b9e-b4c26e77ac8e" />
+  </Folder>
   <Project Path="ProCosmeticsSystem.API/ProCosmeticsSystem.API.csproj" />
-  <Project Path="ProCosmeticsSystem.Application/ProCosmeticsSystem.Application.csproj" />
   <Project Path="ProCosmeticsSystem.Infrastructure/ProCosmeticsSystem.Infrastructure.csproj" />
 </Solution>
