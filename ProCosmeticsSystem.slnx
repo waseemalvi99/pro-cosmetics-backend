@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="ProCosmeticsSystem.API/ProCosmeticsSystem.API.csproj" />
+  <Project Path="ProCosmeticsSystem.Application/ProCosmeticsSystem.Application.csproj" />
+  <Project Path="ProCosmeticsSystem.Infrastructure/ProCosmeticsSystem.Infrastructure.csproj" />
+</Solution>
