@@ -36,7 +36,7 @@ public class SaleRepository : ISaleRepository
                          WHEN 2 THEN 'Cancelled'
                          WHEN 3 THEN 'Refunded'
                      END AS Status,
-                     s.Notes, s.CreatedAt
+                     s.Notes, s.DueDate, s.CreatedAt
                      FROM Sales s
                      LEFT JOIN Customers c ON s.CustomerId = c.Id
                      LEFT JOIN Salesmen sm ON s.SalesmanId = sm.Id
@@ -68,7 +68,7 @@ public class SaleRepository : ISaleRepository
                   WHEN 2 THEN 'Cancelled'
                   WHEN 3 THEN 'Refunded'
               END AS Status,
-              s.Notes, s.CreatedAt
+              s.Notes, s.DueDate, s.CreatedAt
               FROM Sales s
               LEFT JOIN Customers c ON s.CustomerId = c.Id
               LEFT JOIN Salesmen sm ON s.SalesmanId = sm.Id
@@ -80,8 +80,8 @@ public class SaleRepository : ISaleRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.ExecuteScalarAsync<int>(
-            @"INSERT INTO Sales (SaleNumber, CustomerId, SalesmanId, SaleDate, SubTotal, Discount, Tax, TotalAmount, PaymentMethod, Status, Notes, CreatedAt, CreatedBy, IsDeleted)
-              VALUES (@SaleNumber, @CustomerId, @SalesmanId, @SaleDate, @SubTotal, @Discount, @Tax, @TotalAmount, @PaymentMethod, @Status, @Notes, @CreatedAt, @CreatedBy, 0);
+            @"INSERT INTO Sales (SaleNumber, CustomerId, SalesmanId, SaleDate, SubTotal, Discount, Tax, TotalAmount, PaymentMethod, Status, Notes, DueDate, CreatedAt, CreatedBy, IsDeleted)
+              VALUES (@SaleNumber, @CustomerId, @SalesmanId, @SaleDate, @SubTotal, @Discount, @Tax, @TotalAmount, @PaymentMethod, @Status, @Notes, @DueDate, @CreatedAt, @CreatedBy, 0);
               SELECT CAST(SCOPE_IDENTITY() AS INT)",
             sale);
     }
@@ -115,5 +115,12 @@ public class SaleRepository : ISaleRepository
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync("UPDATE Sales SET Status = @Status, UpdatedAt = @UpdatedAt WHERE Id = @Id",
             new { Id = id, Status = status, UpdatedAt = DateTime.UtcNow });
+    }
+
+    public async Task UpdateDueDateAsync(int id, DateTime dueDate)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync("UPDATE Sales SET DueDate = @DueDate, UpdatedAt = @UpdatedAt WHERE Id = @Id",
+            new { Id = id, DueDate = dueDate, UpdatedAt = DateTime.UtcNow });
     }
 }

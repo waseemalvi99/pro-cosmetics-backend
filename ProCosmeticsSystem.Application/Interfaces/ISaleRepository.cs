@@ -12,4 +12,5 @@ public interface ISaleRepository
     Task AddItemsAsync(int saleId, IEnumerable<SaleItem> items);
     Task<List<SaleItemDto>> GetItemsAsync(int saleId);
     Task UpdateStatusAsync(int id, int status);
+    Task UpdateDueDateAsync(int id, DateTime dueDate);
 }

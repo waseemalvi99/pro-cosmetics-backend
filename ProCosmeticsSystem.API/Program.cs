@@ -8,6 +8,8 @@ using ProCosmeticsSystem.Application;
 using ProCosmeticsSystem.Infrastructure;
 using ProCosmeticsSystem.Infrastructure.Hubs;
 
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Layer DI
@@ -117,6 +119,10 @@ app.MapDeliveryEndpoints();
 app.MapDeliveryManEndpoints();
 app.MapNotificationEndpoints();
 app.MapReportEndpoints();
+app.MapLedgerEndpoints();
+app.MapPaymentEndpoints();
+app.MapCreditDebitNoteEndpoints();
+app.MapAccountEndpoints();
 
 // SignalR hub
 app.MapHub<NotificationHub>("/hubs/notifications");

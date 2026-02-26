@@ -11,6 +11,8 @@ public class PurchaseOrderDto
     public string Status { get; set; } = string.Empty;
     public decimal TotalAmount { get; set; }
     public string? Notes { get; set; }
+    public int PaymentTermDays { get; set; }
+    public DateTime? DueDate { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<PurchaseOrderItemDto> Items { get; set; } = [];
 }
@@ -31,6 +33,7 @@ public class CreatePurchaseOrderRequest
     public int SupplierId { get; set; }
     public DateTime? ExpectedDeliveryDate { get; set; }
     public string? Notes { get; set; }
+    public int? PaymentTermDays { get; set; }
     public List<CreatePurchaseOrderItemRequest> Items { get; set; } = [];
 }
 

@@ -16,4 +16,5 @@ public class Sale : AuditableEntity
     public PaymentMethod PaymentMethod { get; set; }
     public SaleStatus Status { get; set; }
     public string? Notes { get; set; }
+    public DateTime? DueDate { get; set; }
 }

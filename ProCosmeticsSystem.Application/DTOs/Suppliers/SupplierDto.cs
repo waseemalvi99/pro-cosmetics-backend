@@ -10,6 +10,7 @@ public class SupplierDto
     public string? Address { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; }
+    public int PaymentTermDays { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -21,6 +22,7 @@ public class CreateSupplierRequest
     public string? Phone { get; set; }
     public string? Address { get; set; }
     public string? Notes { get; set; }
+    public int PaymentTermDays { get; set; }
 }
 
 public class UpdateSupplierRequest
@@ -32,4 +34,5 @@ public class UpdateSupplierRequest
     public string? Address { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
+    public int PaymentTermDays { get; set; }
 }

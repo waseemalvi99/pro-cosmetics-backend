@@ -16,6 +16,7 @@ public class SaleDto
     public string PaymentMethod { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string? Notes { get; set; }
+    public DateTime? DueDate { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<SaleItemDto> Items { get; set; } = [];
 }

@@ -9,4 +9,6 @@ public class UpdateCustomerRequest
     public string? City { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
+    public int CreditDays { get; set; }
+    public decimal CreditLimit { get; set; }
 }

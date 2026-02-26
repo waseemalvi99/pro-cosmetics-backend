@@ -12,4 +12,6 @@ public class PurchaseOrder : AuditableEntity
     public PurchaseOrderStatus Status { get; set; } = PurchaseOrderStatus.Draft;
     public decimal TotalAmount { get; set; }
     public string? Notes { get; set; }
+    public int PaymentTermDays { get; set; }
+    public DateTime? DueDate { get; set; }
 }

@@ -11,12 +11,21 @@ public class SaleService
 {
     private readonly ISaleRepository _repo;
     private readonly IInventoryRepository _inventoryRepo;
+    private readonly ICustomerRepository _customerRepo;
+    private readonly ILedgerRepository _ledgerRepo;
     private readonly ICurrentUserService _currentUser;
 
-    public SaleService(ISaleRepository repo, IInventoryRepository inventoryRepo, ICurrentUserService currentUser)
+    public SaleService(
+        ISaleRepository repo,
+        IInventoryRepository inventoryRepo,
+        ICustomerRepository customerRepo,
+        ILedgerRepository ledgerRepo,
+        ICurrentUserService currentUser)
     {
         _repo = repo;
         _inventoryRepo = inventoryRepo;
+        _customerRepo = customerRepo;
+        _ledgerRepo = ledgerRepo;
         _currentUser = currentUser;
     }
 
@@ -53,6 +62,28 @@ public class SaleService
         var totalAmount = subTotal - request.Discount + request.Tax;
         var saleNumber = $"SL-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
 
+        // Check credit limit if credit sale with customer
+        var paymentMethod = (PaymentMethod)request.PaymentMethod;
+        DateTime? dueDate = null;
+
+        if (paymentMethod == PaymentMethod.Credit && request.CustomerId.HasValue)
+        {
+            var customer = await _customerRepo.GetByIdAsync(request.CustomerId.Value)
+                ?? throw new NotFoundException("Customer", request.CustomerId.Value);
+
+            if (customer.CreditLimit > 0)
+            {
+                var currentBalance = await _ledgerRepo.GetBalanceAsync(request.CustomerId.Value, null);
+                if (currentBalance + totalAmount > customer.CreditLimit)
+                    throw new ValidationException("CreditLimit",
+                        $"Credit limit exceeded. Limit: {customer.CreditLimit:N2}, Current balance: {currentBalance:N2}, Sale amount: {totalAmount:N2}");
+            }
+
+            dueDate = customer.CreditDays > 0
+                ? DateTime.UtcNow.AddDays(customer.CreditDays)
+                : DateTime.UtcNow.AddDays(30);
+        }
+
         var sale = new Sale
         {
             SaleNumber = saleNumber,
@@ -63,9 +94,10 @@ public class SaleService
             Discount = request.Discount,
             Tax = request.Tax,
             TotalAmount = totalAmount,
-            PaymentMethod = (PaymentMethod)request.PaymentMethod,
+            PaymentMethod = paymentMethod,
             Status = SaleStatus.Completed,
             Notes = request.Notes,
+            DueDate = dueDate,
             CreatedBy = _currentUser.UserId
         };
 
@@ -98,6 +130,24 @@ public class SaleService
             });
         }
 
+        // Create ledger entry for credit sales
+        if (paymentMethod == PaymentMethod.Credit && request.CustomerId.HasValue)
+        {
+            var ledgerEntry = new LedgerEntry
+            {
+                EntryDate = DateTime.UtcNow,
+                AccountType = LedgerAccountType.CustomerReceivable,
+                CustomerId = request.CustomerId.Value,
+                ReferenceType = "Sale",
+                ReferenceId = saleId,
+                Description = $"Credit sale {saleNumber}",
+                DebitAmount = totalAmount,
+                CreditAmount = 0,
+                CreatedBy = _currentUser.UserId
+            };
+            await _ledgerRepo.CreateAsync(ledgerEntry);
+        }
+
         return saleId;
     }
 
@@ -122,6 +172,29 @@ public class SaleService
                 ReferenceId = id,
                 Notes = $"Cancelled sale {sale.SaleNumber}"
             });
+        }
+
+        // Reverse ledger entries if this was a credit sale
+        var ledgerEntries = await _ledgerRepo.GetByReferenceAsync("Sale", id);
+        foreach (var entry in ledgerEntries)
+        {
+            if (entry.IsReversed) continue;
+
+            var reversal = new LedgerEntry
+            {
+                EntryDate = DateTime.UtcNow,
+                AccountType = LedgerAccountType.CustomerReceivable,
+                CustomerId = entry.CustomerId,
+                ReferenceType = "Sale",
+                ReferenceId = id,
+                Description = $"Reversal - cancelled sale {sale.SaleNumber}",
+                DebitAmount = entry.CreditAmount,
+                CreditAmount = entry.DebitAmount,
+                CreatedBy = _currentUser.UserId
+            };
+
+            var reversalId = await _ledgerRepo.CreateAsync(reversal);
+            await _ledgerRepo.MarkReversedAsync(entry.Id, reversalId);
         }
 
         await _repo.UpdateStatusAsync(id, (int)SaleStatus.Cancelled);

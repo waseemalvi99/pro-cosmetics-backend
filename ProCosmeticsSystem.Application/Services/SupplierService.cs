@@ -42,6 +42,7 @@ public class SupplierService
             Phone = request.Phone,
             Address = request.Address,
             Notes = request.Notes,
+            PaymentTermDays = request.PaymentTermDays,
             CreatedBy = _currentUser.UserId
         };
 
@@ -65,6 +66,7 @@ public class SupplierService
             Address = request.Address,
             Notes = request.Notes,
             IsActive = request.IsActive,
+            PaymentTermDays = request.PaymentTermDays,
             UpdatedBy = _currentUser.UserId,
             UpdatedAt = DateTime.UtcNow
         };

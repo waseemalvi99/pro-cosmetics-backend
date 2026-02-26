@@ -12,17 +12,20 @@ public class PurchaseOrderService
     private readonly IPurchaseOrderRepository _repo;
     private readonly ISupplierRepository _supplierRepo;
     private readonly IInventoryRepository _inventoryRepo;
+    private readonly ILedgerRepository _ledgerRepo;
     private readonly ICurrentUserService _currentUser;
 
     public PurchaseOrderService(
         IPurchaseOrderRepository repo,
         ISupplierRepository supplierRepo,
         IInventoryRepository inventoryRepo,
+        ILedgerRepository ledgerRepo,
         ICurrentUserService currentUser)
     {
         _repo = repo;
         _supplierRepo = supplierRepo;
         _inventoryRepo = inventoryRepo;
+        _ledgerRepo = ledgerRepo;
         _currentUser = currentUser;
     }
 
@@ -45,11 +48,14 @@ public class PurchaseOrderService
         if (request.Items.Count == 0)
             throw new ValidationException("Items", "At least one item is required.");
 
-        _ = await _supplierRepo.GetByIdAsync(request.SupplierId)
+        var supplier = await _supplierRepo.GetByIdAsync(request.SupplierId)
             ?? throw new NotFoundException("Supplier", request.SupplierId);
 
         var orderNumber = $"PO-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
         var totalAmount = request.Items.Sum(i => i.Quantity * i.UnitPrice);
+
+        // Use request PaymentTermDays if provided, otherwise use supplier default
+        var paymentTermDays = request.PaymentTermDays ?? supplier.PaymentTermDays;
 
         var order = new PurchaseOrder
         {
@@ -60,6 +66,7 @@ public class PurchaseOrderService
             Status = PurchaseOrderStatus.Draft,
             TotalAmount = totalAmount,
             Notes = request.Notes,
+            PaymentTermDays = paymentTermDays,
             CreatedBy = _currentUser.UserId
         };
 
@@ -124,6 +131,30 @@ public class PurchaseOrderService
         var allFullyReceived = orderItems.All(i => i.QuantityReceived >= i.Quantity);
         var newStatus = allFullyReceived ? PurchaseOrderStatus.Received : PurchaseOrderStatus.PartiallyReceived;
         await _repo.UpdateStatusAsync(id, (int)newStatus);
+
+        // When fully received, set DueDate and create payable ledger entry
+        if (allFullyReceived)
+        {
+            var dueDate = order.PaymentTermDays > 0
+                ? DateTime.UtcNow.AddDays(order.PaymentTermDays)
+                : DateTime.UtcNow.AddDays(30);
+
+            await _repo.UpdateDueDateAsync(id, dueDate);
+
+            var ledgerEntry = new LedgerEntry
+            {
+                EntryDate = DateTime.UtcNow,
+                AccountType = LedgerAccountType.SupplierPayable,
+                SupplierId = order.SupplierId,
+                ReferenceType = "PurchaseOrder",
+                ReferenceId = id,
+                Description = $"Purchase order {order.OrderNumber} received",
+                DebitAmount = 0,
+                CreditAmount = order.TotalAmount,
+                CreatedBy = _currentUser.UserId
+            };
+            await _ledgerRepo.CreateAsync(ledgerEntry);
+        }
     }
 
     public async Task CancelAsync(int id)

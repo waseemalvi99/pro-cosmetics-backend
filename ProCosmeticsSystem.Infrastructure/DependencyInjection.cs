@@ -51,10 +51,15 @@ public static class DependencyInjection
         services.AddScoped<IDeliveryManRepository, DeliveryManRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IReportRepository, ReportRepository>();
+        services.AddScoped<ILedgerRepository, LedgerRepository>();
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<ICreditDebitNoteRepository, CreditDebitNoteRepository>();
+        services.AddScoped<IAccountStatementRepository, AccountStatementRepository>();
 
         // Services
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<INotificationHubService, NotificationHubService>();
+        services.AddScoped<IPdfService, PdfService>();
 
         return services;
     }

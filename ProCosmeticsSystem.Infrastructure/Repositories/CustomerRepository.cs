@@ -27,7 +27,7 @@ public class CustomerRepository : ICustomerRepository
         var countSql = $"SELECT COUNT(*) FROM Customers {where}";
         var totalCount = await conn.ExecuteScalarAsync<int>(countSql, new { Search = $"%{search}%" });
 
-        var sql = $@"SELECT Id, FullName, Email, Phone, Address, City, Notes, IsActive, CreatedAt
+        var sql = $@"SELECT Id, FullName, Email, Phone, Address, City, Notes, IsActive, CreditDays, CreditLimit, CreatedAt
                      FROM Customers {where}
                      ORDER BY CreatedAt DESC
                      OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
@@ -52,7 +52,7 @@ public class CustomerRepository : ICustomerRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryFirstOrDefaultAsync<CustomerDto>(
-            "SELECT Id, FullName, Email, Phone, Address, City, Notes, IsActive, CreatedAt FROM Customers WHERE Id = @Id AND IsDeleted = 0",
+            "SELECT Id, FullName, Email, Phone, Address, City, Notes, IsActive, CreditDays, CreditLimit, CreatedAt FROM Customers WHERE Id = @Id AND IsDeleted = 0",
             new { Id = id });
     }
 
@@ -60,8 +60,8 @@ public class CustomerRepository : ICustomerRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.ExecuteScalarAsync<int>(
-            @"INSERT INTO Customers (FullName, Email, Phone, Address, City, Notes, IsActive, IsDeleted, CreatedAt, CreatedBy)
-              VALUES (@FullName, @Email, @Phone, @Address, @City, @Notes, 1, 0, @CreatedAt, @CreatedBy);
+            @"INSERT INTO Customers (FullName, Email, Phone, Address, City, Notes, IsActive, CreditDays, CreditLimit, IsDeleted, CreatedAt, CreatedBy)
+              VALUES (@FullName, @Email, @Phone, @Address, @City, @Notes, 1, @CreditDays, @CreditLimit, 0, @CreatedAt, @CreatedBy);
               SELECT CAST(SCOPE_IDENTITY() AS INT)",
             customer);
     }
@@ -72,6 +72,7 @@ public class CustomerRepository : ICustomerRepository
         await conn.ExecuteAsync(
             @"UPDATE Customers SET FullName = @FullName, Email = @Email, Phone = @Phone,
               Address = @Address, City = @City, Notes = @Notes, IsActive = @IsActive,
+              CreditDays = @CreditDays, CreditLimit = @CreditLimit,
               UpdatedAt = @UpdatedAt, UpdatedBy = @UpdatedBy
               WHERE Id = @Id AND IsDeleted = 0",
             customer);

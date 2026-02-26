@@ -8,4 +8,6 @@ public class CreateCustomerRequest
     public string? Address { get; set; }
     public string? City { get; set; }
     public string? Notes { get; set; }
+    public int CreditDays { get; set; }
+    public decimal CreditLimit { get; set; }
 }

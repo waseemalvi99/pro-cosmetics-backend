@@ -26,7 +26,7 @@ public class SupplierRepository : ISupplierRepository
 
         var totalCount = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM Suppliers {where}", new { Search = $"%{search}%" });
 
-        var sql = $@"SELECT Id, Name, ContactPerson, Email, Phone, Address, Notes, IsActive, CreatedAt
+        var sql = $@"SELECT Id, Name, ContactPerson, Email, Phone, Address, Notes, IsActive, PaymentTermDays, CreatedAt
                      FROM Suppliers {where}
                      ORDER BY CreatedAt DESC
                      OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
@@ -45,7 +45,7 @@ public class SupplierRepository : ISupplierRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryFirstOrDefaultAsync<SupplierDto>(
-            "SELECT Id, Name, ContactPerson, Email, Phone, Address, Notes, IsActive, CreatedAt FROM Suppliers WHERE Id = @Id AND IsDeleted = 0",
+            "SELECT Id, Name, ContactPerson, Email, Phone, Address, Notes, IsActive, PaymentTermDays, CreatedAt FROM Suppliers WHERE Id = @Id AND IsDeleted = 0",
             new { Id = id });
     }
 
@@ -53,8 +53,8 @@ public class SupplierRepository : ISupplierRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.ExecuteScalarAsync<int>(
-            @"INSERT INTO Suppliers (Name, ContactPerson, Email, Phone, Address, Notes, IsActive, IsDeleted, CreatedAt, CreatedBy)
-              VALUES (@Name, @ContactPerson, @Email, @Phone, @Address, @Notes, 1, 0, @CreatedAt, @CreatedBy);
+            @"INSERT INTO Suppliers (Name, ContactPerson, Email, Phone, Address, Notes, IsActive, PaymentTermDays, IsDeleted, CreatedAt, CreatedBy)
+              VALUES (@Name, @ContactPerson, @Email, @Phone, @Address, @Notes, 1, @PaymentTermDays, 0, @CreatedAt, @CreatedBy);
               SELECT CAST(SCOPE_IDENTITY() AS INT)",
             supplier);
     }
@@ -65,7 +65,7 @@ public class SupplierRepository : ISupplierRepository
         await conn.ExecuteAsync(
             @"UPDATE Suppliers SET Name = @Name, ContactPerson = @ContactPerson, Email = @Email,
               Phone = @Phone, Address = @Address, Notes = @Notes, IsActive = @IsActive,
-              UpdatedAt = @UpdatedAt, UpdatedBy = @UpdatedBy
+              PaymentTermDays = @PaymentTermDays, UpdatedAt = @UpdatedAt, UpdatedBy = @UpdatedBy
               WHERE Id = @Id AND IsDeleted = 0",
             supplier);
     }

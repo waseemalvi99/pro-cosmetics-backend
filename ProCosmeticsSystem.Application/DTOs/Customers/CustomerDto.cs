@@ -10,5 +10,7 @@ public class CustomerDto
     public string? City { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; }
+    public int CreditDays { get; set; }
+    public decimal CreditLimit { get; set; }
     public DateTime CreatedAt { get; set; }
 }

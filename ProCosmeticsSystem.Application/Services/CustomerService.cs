@@ -42,6 +42,8 @@ public class CustomerService
             Address = request.Address,
             City = request.City,
             Notes = request.Notes,
+            CreditDays = request.CreditDays,
+            CreditLimit = request.CreditLimit,
             CreatedBy = _currentUser.UserId
         };
 
@@ -65,6 +67,8 @@ public class CustomerService
             City = request.City,
             Notes = request.Notes,
             IsActive = request.IsActive,
+            CreditDays = request.CreditDays,
+            CreditLimit = request.CreditLimit,
             UpdatedBy = _currentUser.UserId,
             UpdatedAt = DateTime.UtcNow
         };

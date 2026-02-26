@@ -25,6 +25,10 @@ public static class DependencyInjection
         services.AddScoped<SaleService>();
         services.AddScoped<DeliveryService>();
         services.AddScoped<ReportService>();
+        services.AddScoped<LedgerService>();
+        services.AddScoped<PaymentService>();
+        services.AddScoped<CreditDebitNoteService>();
+        services.AddScoped<AccountStatementService>();
 
         // Notification
         services.AddScoped<INotificationService, NotificationService>();

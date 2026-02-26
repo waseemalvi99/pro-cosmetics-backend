@@ -36,7 +36,7 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
                          WHEN 3 THEN 'Received'
                          WHEN 4 THEN 'Cancelled'
                      END AS Status,
-                     po.TotalAmount, po.Notes, po.CreatedAt
+                     po.TotalAmount, po.Notes, po.PaymentTermDays, po.DueDate, po.CreatedAt
                      FROM PurchaseOrders po
                      INNER JOIN Suppliers s ON po.SupplierId = s.Id
                      {where}
@@ -66,7 +66,7 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
                   WHEN 3 THEN 'Received'
                   WHEN 4 THEN 'Cancelled'
               END AS Status,
-              po.TotalAmount, po.Notes, po.CreatedAt
+              po.TotalAmount, po.Notes, po.PaymentTermDays, po.DueDate, po.CreatedAt
               FROM PurchaseOrders po
               INNER JOIN Suppliers s ON po.SupplierId = s.Id
               WHERE po.Id = @Id",
@@ -77,8 +77,8 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.ExecuteScalarAsync<int>(
-            @"INSERT INTO PurchaseOrders (SupplierId, OrderNumber, OrderDate, ExpectedDeliveryDate, Status, TotalAmount, Notes, CreatedAt, CreatedBy, IsDeleted)
-              VALUES (@SupplierId, @OrderNumber, @OrderDate, @ExpectedDeliveryDate, @Status, @TotalAmount, @Notes, @CreatedAt, @CreatedBy, 0);
+            @"INSERT INTO PurchaseOrders (SupplierId, OrderNumber, OrderDate, ExpectedDeliveryDate, Status, TotalAmount, Notes, PaymentTermDays, CreatedAt, CreatedBy, IsDeleted)
+              VALUES (@SupplierId, @OrderNumber, @OrderDate, @ExpectedDeliveryDate, @Status, @TotalAmount, @Notes, @PaymentTermDays, @CreatedAt, @CreatedBy, 0);
               SELECT CAST(SCOPE_IDENTITY() AS INT)",
             order);
     }
@@ -128,5 +128,12 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
             @"UPDATE PurchaseOrderItems SET QuantityReceived = @QuantityReceived
               WHERE PurchaseOrderId = @OrderId AND ProductId = @ProductId",
             new { OrderId = orderId, ProductId = productId, QuantityReceived = quantityReceived });
+    }
+
+    public async Task UpdateDueDateAsync(int id, DateTime dueDate)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync("UPDATE PurchaseOrders SET DueDate = @DueDate, UpdatedAt = @UpdatedAt WHERE Id = @Id",
+            new { Id = id, DueDate = dueDate, UpdatedAt = DateTime.UtcNow });
     }
 }
