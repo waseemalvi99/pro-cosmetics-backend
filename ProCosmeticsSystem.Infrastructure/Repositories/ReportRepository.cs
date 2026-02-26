@@ -18,6 +18,9 @@ public class ReportRepository : IReportRepository
     {
         using var conn = _db.CreateConnection();
 
+        var dateFrom = from.Date;
+        var dateTo = to.Date.AddDays(1);
+
         var periodExpr = groupBy.ToLower() switch
         {
             "week" => "CONCAT(DATEPART(YEAR, SaleDate), '-W', RIGHT('0' + CAST(DATEPART(WEEK, SaleDate) AS VARCHAR), 2))",
@@ -31,11 +34,11 @@ public class ReportRepository : IReportRepository
                      SUM(Discount) AS Discount,
                      SUM(TotalAmount - Discount) AS NetRevenue
                      FROM Sales
-                     WHERE SaleDate >= @From AND SaleDate <= @To AND Status = 0
+                     WHERE SaleDate >= @From AND SaleDate < @To AND Status = 0
                      GROUP BY {periodExpr}
                      ORDER BY MIN(SaleDate)";
 
-        var items = (await conn.QueryAsync<SalesReportItem>(sql, new { From = from, To = to })).ToList();
+        var items = (await conn.QueryAsync<SalesReportItem>(sql, new { From = dateFrom, To = dateTo })).ToList();
 
         return new SalesReportDto
         {
@@ -49,31 +52,39 @@ public class ReportRepository : IReportRepository
     public async Task<List<TopProductDto>> GetTopProductsAsync(DateTime from, DateTime to, int top)
     {
         using var conn = _db.CreateConnection();
+
+        var dateFrom = from.Date;
+        var dateTo = to.Date.AddDays(1);
+
         var results = await conn.QueryAsync<TopProductDto>(
             @"SELECT TOP (@Top) si.ProductId, p.Name AS ProductName, SUM(si.Quantity) AS QuantitySold, SUM(si.TotalPrice) AS Revenue
               FROM SaleItems si
               INNER JOIN Products p ON si.ProductId = p.Id
               INNER JOIN Sales s ON si.SaleId = s.Id
-              WHERE s.SaleDate >= @From AND s.SaleDate <= @To AND s.Status = 0
+              WHERE s.SaleDate >= @From AND s.SaleDate < @To AND s.Status = 0
               GROUP BY si.ProductId, p.Name
               ORDER BY Revenue DESC",
-            new { From = from, To = to, Top = top });
+            new { From = dateFrom, To = dateTo, Top = top });
         return results.ToList();
     }
 
     public async Task<List<SalesmanPerformanceDto>> GetSalesmanPerformanceAsync(DateTime from, DateTime to)
     {
         using var conn = _db.CreateConnection();
+
+        var dateFrom = from.Date;
+        var dateTo = to.Date.AddDays(1);
+
         var results = await conn.QueryAsync<SalesmanPerformanceDto>(
             @"SELECT sm.Id AS SalesmanId, sm.Name AS SalesmanName, COUNT(s.Id) AS TotalSales,
               SUM(s.TotalAmount) AS TotalRevenue, sm.CommissionRate,
               SUM(s.TotalAmount) * sm.CommissionRate / 100 AS CommissionAmount
               FROM Sales s
               INNER JOIN Salesmen sm ON s.SalesmanId = sm.Id
-              WHERE s.SaleDate >= @From AND s.SaleDate <= @To AND s.Status = 0
+              WHERE s.SaleDate >= @From AND s.SaleDate < @To AND s.Status = 0
               GROUP BY sm.Id, sm.Name, sm.CommissionRate
               ORDER BY TotalRevenue DESC",
-            new { From = from, To = to });
+            new { From = dateFrom, To = dateTo });
         return results.ToList();
     }
 
@@ -104,14 +115,17 @@ public class ReportRepository : IReportRepository
     {
         using var conn = _db.CreateConnection();
 
+        var dateFrom = from.Date;
+        var dateTo = to.Date.AddDays(1);
+
         var items = (await conn.QueryAsync<PurchaseReportItem>(
             @"SELECT s.Id AS SupplierId, s.Name AS SupplierName, COUNT(po.Id) AS OrderCount, SUM(po.TotalAmount) AS TotalSpent
               FROM PurchaseOrders po
               INNER JOIN Suppliers s ON po.SupplierId = s.Id
-              WHERE po.OrderDate >= @From AND po.OrderDate <= @To
+              WHERE po.OrderDate >= @From AND po.OrderDate < @To
               GROUP BY s.Id, s.Name
               ORDER BY TotalSpent DESC",
-            new { From = from, To = to })).ToList();
+            new { From = dateFrom, To = dateTo })).ToList();
 
         return new PurchaseReportDto
         {
@@ -125,6 +139,9 @@ public class ReportRepository : IReportRepository
     {
         using var conn = _db.CreateConnection();
 
+        var dateFrom = from.Date;
+        var dateTo = to.Date.AddDays(1);
+
         var result = await conn.QueryFirstOrDefaultAsync<DeliveryReportDto>(
             @"SELECT COUNT(*) AS TotalDeliveries,
               SUM(CASE WHEN Status = 4 THEN 1 ELSE 0 END) AS DeliveredCount,
@@ -136,8 +153,8 @@ public class ReportRepository : IReportRepository
               AVG(CASE WHEN Status = 4 AND DeliveredAt IS NOT NULL AND AssignedAt IS NOT NULL
                 THEN DATEDIFF(MINUTE, AssignedAt, DeliveredAt) / 60.0 ELSE NULL END) AS AverageDeliveryTimeHours
               FROM Deliveries
-              WHERE CreatedAt >= @From AND CreatedAt <= @To",
-            new { From = from, To = to });
+              WHERE CreatedAt >= @From AND CreatedAt < @To",
+            new { From = dateFrom, To = dateTo });
 
         return result ?? new DeliveryReportDto();
     }
@@ -146,32 +163,22 @@ public class ReportRepository : IReportRepository
     {
         using var conn = _db.CreateConnection();
 
-        var revenue = await conn.ExecuteScalarAsync<decimal>(
-            "SELECT ISNULL(SUM(TotalAmount), 0) FROM Sales WHERE SaleDate >= @From AND SaleDate <= @To AND Status = 0",
-            new { From = from, To = to });
+        var dateFrom = from.Date;
+        var dateTo = to.Date.AddDays(1);
 
-        var costs = await conn.ExecuteScalarAsync<decimal>(
-            "SELECT ISNULL(SUM(TotalAmount), 0) FROM PurchaseOrders WHERE OrderDate >= @From AND OrderDate <= @To AND Status = 3",
-            new { From = from, To = to });
+        var parameters = new { From = dateFrom, To = dateTo };
 
-        var salesCount = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM Sales WHERE SaleDate >= @From AND SaleDate <= @To AND Status = 0",
-            new { From = from, To = to });
+        var result = await conn.QueryFirstAsync<FinancialSummaryDto>(
+            @"SELECT
+              (SELECT ISNULL(SUM(TotalAmount), 0) FROM Sales WHERE SaleDate >= @From AND SaleDate < @To AND Status = 0) AS TotalRevenue,
+              (SELECT ISNULL(SUM(TotalAmount), 0) FROM PurchaseOrders WHERE OrderDate >= @From AND OrderDate < @To AND Status = 3) AS TotalCosts,
+              (SELECT COUNT(*) FROM Sales WHERE SaleDate >= @From AND SaleDate < @To AND Status = 0) AS TotalSales,
+              (SELECT COUNT(*) FROM PurchaseOrders WHERE OrderDate >= @From AND OrderDate < @To) AS TotalPurchases",
+            parameters);
 
-        var purchasesCount = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM PurchaseOrders WHERE OrderDate >= @From AND OrderDate <= @To",
-            new { From = from, To = to });
+        result.GrossProfit = result.TotalRevenue - result.TotalCosts;
+        result.ProfitMargin = result.TotalRevenue > 0 ? Math.Round(result.GrossProfit / result.TotalRevenue * 100, 2) : 0;
 
-        var grossProfit = revenue - costs;
-
-        return new FinancialSummaryDto
-        {
-            TotalRevenue = revenue,
-            TotalCosts = costs,
-            GrossProfit = grossProfit,
-            ProfitMargin = revenue > 0 ? Math.Round(grossProfit / revenue * 100, 2) : 0,
-            TotalSales = salesCount,
-            TotalPurchases = purchasesCount
-        };
+        return result;
     }
 }
