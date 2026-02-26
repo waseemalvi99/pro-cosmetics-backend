@@ -29,7 +29,14 @@ public class SaleRepository : ISaleRepository
 
         var sql = $@"SELECT s.Id, s.SaleNumber, s.CustomerId, c.FullName AS CustomerName,
                      s.SalesmanId, sm.Name AS SalesmanName, s.SaleDate, s.SubTotal, s.Discount,
-                     s.Tax, s.TotalAmount, s.PaymentMethod, s.Status, s.Notes, s.CreatedAt
+                     s.Tax, s.TotalAmount, s.PaymentMethod,
+                     CASE s.Status
+                         WHEN 0 THEN 'Completed'
+                         WHEN 1 THEN 'Pending'
+                         WHEN 2 THEN 'Cancelled'
+                         WHEN 3 THEN 'Refunded'
+                     END AS Status,
+                     s.Notes, s.CreatedAt
                      FROM Sales s
                      LEFT JOIN Customers c ON s.CustomerId = c.Id
                      LEFT JOIN Salesmen sm ON s.SalesmanId = sm.Id
@@ -54,7 +61,14 @@ public class SaleRepository : ISaleRepository
         return await conn.QueryFirstOrDefaultAsync<SaleDto>(
             @"SELECT s.Id, s.SaleNumber, s.CustomerId, c.FullName AS CustomerName,
               s.SalesmanId, sm.Name AS SalesmanName, s.SaleDate, s.SubTotal, s.Discount,
-              s.Tax, s.TotalAmount, s.PaymentMethod, s.Status, s.Notes, s.CreatedAt
+              s.Tax, s.TotalAmount, s.PaymentMethod,
+              CASE s.Status
+                  WHEN 0 THEN 'Completed'
+                  WHEN 1 THEN 'Pending'
+                  WHEN 2 THEN 'Cancelled'
+                  WHEN 3 THEN 'Refunded'
+              END AS Status,
+              s.Notes, s.CreatedAt
               FROM Sales s
               LEFT JOIN Customers c ON s.CustomerId = c.Id
               LEFT JOIN Salesmen sm ON s.SalesmanId = sm.Id

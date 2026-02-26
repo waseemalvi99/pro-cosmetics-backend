@@ -20,16 +20,38 @@ public class DeliveryRepository : IDeliveryRepository
     {
         using var conn = _db.CreateConnection();
 
+        var statusCase = @"CASE d.Status
+                         WHEN 0 THEN 'Pending'
+                         WHEN 1 THEN 'Assigned'
+                         WHEN 2 THEN 'PickedUp'
+                         WHEN 3 THEN 'InTransit'
+                         WHEN 4 THEN 'Delivered'
+                         WHEN 5 THEN 'Failed'
+                     END";
+
+        // Convert status string filter to int for DB comparison
+        int? statusInt = status?.ToLower() switch
+        {
+            "pending" => 0,
+            "assigned" => 1,
+            "pickedup" => 2,
+            "intransit" => 3,
+            "delivered" => 4,
+            "failed" => 5,
+            _ => null
+        };
+
         var where = "WHERE 1=1";
         if (deliveryManId.HasValue) where += " AND d.DeliveryManId = @DeliveryManId";
-        if (!string.IsNullOrWhiteSpace(status)) where += " AND d.Status = @Status";
+        if (statusInt.HasValue) where += " AND d.Status = @StatusInt";
 
         var totalCount = await conn.ExecuteScalarAsync<int>(
             $"SELECT COUNT(*) FROM Deliveries d {where}",
-            new { DeliveryManId = deliveryManId, Status = status });
+            new { DeliveryManId = deliveryManId, StatusInt = statusInt });
 
         var sql = $@"SELECT d.Id, d.SaleId, s.SaleNumber, d.DeliveryManId, dm.Name AS DeliveryManName,
-                     d.Status, d.AssignedAt, d.PickedUpAt, d.DeliveredAt, d.DeliveryAddress, d.Notes, d.CreatedAt
+                     {statusCase} AS Status,
+                     d.AssignedAt, d.PickedUpAt, d.DeliveredAt, d.DeliveryAddress, d.Notes, d.CreatedAt
                      FROM Deliveries d
                      LEFT JOIN Sales s ON d.SaleId = s.Id
                      LEFT JOIN DeliveryMen dm ON d.DeliveryManId = dm.Id
@@ -40,7 +62,7 @@ public class DeliveryRepository : IDeliveryRepository
         var items = await conn.QueryAsync<DeliveryDto>(sql, new
         {
             DeliveryManId = deliveryManId,
-            Status = status,
+            StatusInt = statusInt,
             Offset = (page - 1) * pageSize,
             PageSize = pageSize
         });
@@ -53,7 +75,15 @@ public class DeliveryRepository : IDeliveryRepository
         using var conn = _db.CreateConnection();
         return await conn.QueryFirstOrDefaultAsync<DeliveryDto>(
             @"SELECT d.Id, d.SaleId, s.SaleNumber, d.DeliveryManId, dm.Name AS DeliveryManName,
-              d.Status, d.AssignedAt, d.PickedUpAt, d.DeliveredAt, d.DeliveryAddress, d.Notes, d.CreatedAt
+              CASE d.Status
+                  WHEN 0 THEN 'Pending'
+                  WHEN 1 THEN 'Assigned'
+                  WHEN 2 THEN 'PickedUp'
+                  WHEN 3 THEN 'InTransit'
+                  WHEN 4 THEN 'Delivered'
+                  WHEN 5 THEN 'Failed'
+              END AS Status,
+              d.AssignedAt, d.PickedUpAt, d.DeliveredAt, d.DeliveryAddress, d.Notes, d.CreatedAt
               FROM Deliveries d
               LEFT JOIN Sales s ON d.SaleId = s.Id
               LEFT JOIN DeliveryMen dm ON d.DeliveryManId = dm.Id

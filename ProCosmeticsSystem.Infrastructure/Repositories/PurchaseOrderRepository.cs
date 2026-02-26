@@ -28,7 +28,15 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
             $"SELECT COUNT(*) FROM PurchaseOrders po {where}", new { SupplierId = supplierId });
 
         var sql = $@"SELECT po.Id, po.SupplierId, s.Name AS SupplierName, po.OrderNumber, po.OrderDate,
-                     po.ExpectedDeliveryDate, po.Status, po.TotalAmount, po.Notes, po.CreatedAt
+                     po.ExpectedDeliveryDate,
+                     CASE po.Status
+                         WHEN 0 THEN 'Draft'
+                         WHEN 1 THEN 'Submitted'
+                         WHEN 2 THEN 'PartiallyReceived'
+                         WHEN 3 THEN 'Received'
+                         WHEN 4 THEN 'Cancelled'
+                     END AS Status,
+                     po.TotalAmount, po.Notes, po.CreatedAt
                      FROM PurchaseOrders po
                      INNER JOIN Suppliers s ON po.SupplierId = s.Id
                      {where}
@@ -50,7 +58,15 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
         using var conn = _db.CreateConnection();
         return await conn.QueryFirstOrDefaultAsync<PurchaseOrderDto>(
             @"SELECT po.Id, po.SupplierId, s.Name AS SupplierName, po.OrderNumber, po.OrderDate,
-              po.ExpectedDeliveryDate, po.Status, po.TotalAmount, po.Notes, po.CreatedAt
+              po.ExpectedDeliveryDate,
+              CASE po.Status
+                  WHEN 0 THEN 'Draft'
+                  WHEN 1 THEN 'Submitted'
+                  WHEN 2 THEN 'PartiallyReceived'
+                  WHEN 3 THEN 'Received'
+                  WHEN 4 THEN 'Cancelled'
+              END AS Status,
+              po.TotalAmount, po.Notes, po.CreatedAt
               FROM PurchaseOrders po
               INNER JOIN Suppliers s ON po.SupplierId = s.Id
               WHERE po.Id = @Id",
