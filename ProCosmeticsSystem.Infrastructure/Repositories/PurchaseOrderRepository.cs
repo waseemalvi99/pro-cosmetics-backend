@@ -83,7 +83,7 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
     {
         using var conn = _db.CreateConnection();
         var results = await conn.QueryAsync<PurchaseOrderItemDto>(
-            @"SELECT poi.Id, poi.ProductId, p.Name AS ProductName, poi.Quantity, poi.UnitPrice, poi.TotalPrice
+            @"SELECT poi.Id, poi.ProductId, p.Name AS ProductName, poi.Quantity, poi.QuantityReceived, poi.UnitPrice, poi.TotalPrice
               FROM PurchaseOrderItems poi
               INNER JOIN Products p ON poi.ProductId = p.Id
               WHERE poi.PurchaseOrderId = @OrderId",
@@ -103,5 +103,14 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync("UPDATE PurchaseOrders SET TotalAmount = @Total, UpdatedAt = @UpdatedAt WHERE Id = @Id",
             new { Id = id, Total = total, UpdatedAt = DateTime.UtcNow });
+    }
+
+    public async Task UpdateItemReceivedQuantityAsync(int orderId, int productId, int quantityReceived)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            @"UPDATE PurchaseOrderItems SET QuantityReceived = @QuantityReceived
+              WHERE PurchaseOrderId = @OrderId AND ProductId = @ProductId",
+            new { OrderId = orderId, ProductId = productId, QuantityReceived = quantityReceived });
     }
 }

@@ -76,6 +76,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Seed admin user & permissions on startup
+using (var scope = app.Services.CreateScope())
+{
+    var seeder = scope.ServiceProvider.GetRequiredService<ProCosmeticsSystem.Infrastructure.Services.DatabaseSeeder>();
+    await seeder.SeedAsync();
+}
+
 // Middleware pipeline
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 

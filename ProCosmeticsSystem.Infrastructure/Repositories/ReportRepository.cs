@@ -18,28 +18,21 @@ public class ReportRepository : IReportRepository
     {
         using var conn = _db.CreateConnection();
 
-        var dateFormat = groupBy.ToLower() switch
+        var periodExpr = groupBy.ToLower() switch
         {
-            "week" => "DATEPART(YEAR, SaleDate), DATEPART(WEEK, SaleDate)",
+            "week" => "CONCAT(DATEPART(YEAR, SaleDate), '-W', RIGHT('0' + CAST(DATEPART(WEEK, SaleDate) AS VARCHAR), 2))",
             "month" => "FORMAT(SaleDate, 'yyyy-MM')",
-            _ => "CAST(SaleDate AS DATE)"
+            _ => "CONVERT(VARCHAR(10), SaleDate, 120)"
         };
 
-        var periodSelect = groupBy.ToLower() switch
-        {
-            "week" => "CONCAT(DATEPART(YEAR, SaleDate), '-W', DATEPART(WEEK, SaleDate))",
-            "month" => "FORMAT(SaleDate, 'yyyy-MM')",
-            _ => "CAST(SaleDate AS VARCHAR(10))"
-        };
-
-        var sql = $@"SELECT {periodSelect} AS Period,
+        var sql = $@"SELECT {periodExpr} AS Period,
                      COUNT(*) AS OrderCount,
                      SUM(TotalAmount) AS Revenue,
                      SUM(Discount) AS Discount,
                      SUM(TotalAmount - Discount) AS NetRevenue
                      FROM Sales
                      WHERE SaleDate >= @From AND SaleDate <= @To AND Status = 0
-                     GROUP BY {dateFormat}
+                     GROUP BY {periodExpr}
                      ORDER BY MIN(SaleDate)";
 
         var items = (await conn.QueryAsync<SalesReportItem>(sql, new { From = from, To = to })).ToList();

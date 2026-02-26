@@ -32,6 +32,9 @@ public static class DependencyInjection
         .AddRoles<AppRole>()
         .AddEntityFrameworkStores<AppIdentityDbContext>();
 
+        // Seeders
+        services.AddScoped<DatabaseSeeder>();
+
         // Repositories
         services.AddScoped<IPermissionRepository, PermissionRepository>();
         services.AddScoped<IUserRepository, UserRepository>();

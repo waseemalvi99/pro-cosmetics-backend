@@ -93,23 +93,37 @@ public class PurchaseOrderService
         if (order.Status != nameof(PurchaseOrderStatus.Submitted) && order.Status != nameof(PurchaseOrderStatus.PartiallyReceived))
             throw new AppException("Only submitted or partially received orders can be received.");
 
-        foreach (var item in request.Items)
-        {
-            if (item.QuantityReceived <= 0) continue;
+        var orderItems = await _repo.GetItemsAsync(id);
 
-            await _inventoryRepo.UpdateQuantityAsync(item.ProductId, item.QuantityReceived);
+        foreach (var received in request.Items)
+        {
+            if (received.QuantityReceived <= 0) continue;
+
+            var orderItem = orderItems.FirstOrDefault(i => i.ProductId == received.ProductId)
+                ?? throw new AppException($"Product {received.ProductId} is not part of this purchase order.");
+
+            var newTotalReceived = orderItem.QuantityReceived + received.QuantityReceived;
+            if (newTotalReceived > orderItem.Quantity)
+                throw new AppException($"Cannot receive more than ordered for product {orderItem.ProductName}. Ordered: {orderItem.Quantity}, Already received: {orderItem.QuantityReceived}, Attempting: {received.QuantityReceived}.");
+
+            await _repo.UpdateItemReceivedQuantityAsync(id, received.ProductId, newTotalReceived);
+            await _inventoryRepo.UpdateQuantityAsync(received.ProductId, received.QuantityReceived);
             await _inventoryRepo.AddTransactionAsync(new InventoryTransaction
             {
-                ProductId = item.ProductId,
+                ProductId = received.ProductId,
                 TransactionType = InventoryTransactionType.Purchase,
-                Quantity = item.QuantityReceived,
+                Quantity = received.QuantityReceived,
                 ReferenceType = "PurchaseOrder",
                 ReferenceId = id,
                 Notes = $"Received from PO {order.OrderNumber}"
             });
+
+            orderItem.QuantityReceived = newTotalReceived;
         }
 
-        await _repo.UpdateStatusAsync(id, (int)PurchaseOrderStatus.Received);
+        var allFullyReceived = orderItems.All(i => i.QuantityReceived >= i.Quantity);
+        var newStatus = allFullyReceived ? PurchaseOrderStatus.Received : PurchaseOrderStatus.PartiallyReceived;
+        await _repo.UpdateStatusAsync(id, (int)newStatus);
     }
 
     public async Task CancelAsync(int id)
