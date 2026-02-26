@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using ProCosmeticsSystem.API.Middlewares;
 using ProCosmeticsSystem.Application.DTOs.Common;
 using ProCosmeticsSystem.Application.DTOs.Deliveries;
@@ -29,15 +30,15 @@ public static class DeliveryEndpoints
             return Results.Created($"/api/deliveries/{id}", ApiResponse<int>.Ok(id, "Delivery created."));
         }).RequirePermission("Deliveries:Create");
 
-        group.MapPut("/{id:int}/pickup", async (int id, UpdateDeliveryStatusRequest request, DeliveryService service) =>
+        group.MapPut("/{id:int}/pickup", async (int id, [FromBody] UpdateDeliveryStatusRequest? request, DeliveryService service) =>
         {
-            await service.PickupAsync(id, request);
+            await service.PickupAsync(id, request ?? new());
             return Results.Ok(ApiResponse.Ok("Delivery picked up."));
         }).RequirePermission("Deliveries:Edit");
 
-        group.MapPut("/{id:int}/deliver", async (int id, UpdateDeliveryStatusRequest request, DeliveryService service) =>
+        group.MapPut("/{id:int}/deliver", async (int id, [FromBody] UpdateDeliveryStatusRequest? request, DeliveryService service) =>
         {
-            await service.DeliverAsync(id, request);
+            await service.DeliverAsync(id, request ?? new());
             return Results.Ok(ApiResponse.Ok("Delivery completed."));
         }).RequirePermission("Deliveries:Edit");
     }
