@@ -29,7 +29,13 @@ public class SaleRepository : ISaleRepository
 
         var sql = $@"SELECT s.Id, s.SaleNumber, s.CustomerId, c.FullName AS CustomerName,
                      s.SalesmanId, sm.Name AS SalesmanName, s.SaleDate, s.SubTotal, s.Discount,
-                     s.Tax, s.TotalAmount, s.PaymentMethod,
+                     s.Tax, s.TotalAmount,
+                     CASE s.PaymentMethod
+                         WHEN 0 THEN 'Cash'
+                         WHEN 1 THEN 'Card'
+                         WHEN 2 THEN 'BankTransfer'
+                         WHEN 3 THEN 'Credit'
+                     END AS PaymentMethod,
                      CASE s.Status
                          WHEN 0 THEN 'Completed'
                          WHEN 1 THEN 'Pending'
@@ -61,7 +67,13 @@ public class SaleRepository : ISaleRepository
         return await conn.QueryFirstOrDefaultAsync<SaleDto>(
             @"SELECT s.Id, s.SaleNumber, s.CustomerId, c.FullName AS CustomerName,
               s.SalesmanId, sm.Name AS SalesmanName, s.SaleDate, s.SubTotal, s.Discount,
-              s.Tax, s.TotalAmount, s.PaymentMethod,
+              s.Tax, s.TotalAmount,
+                     CASE s.PaymentMethod
+                         WHEN 0 THEN 'Cash'
+                         WHEN 1 THEN 'Card'
+                         WHEN 2 THEN 'BankTransfer'
+                         WHEN 3 THEN 'Credit'
+                     END AS PaymentMethod,
               CASE s.Status
                   WHEN 0 THEN 'Completed'
                   WHEN 1 THEN 'Pending'
