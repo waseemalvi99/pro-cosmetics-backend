@@ -13,17 +13,26 @@ public class DeliveryService
     private readonly IDeliveryManRepository _deliveryManRepo;
     private readonly INotificationService _notificationService;
     private readonly ICurrentUserService _currentUser;
+    private readonly IEmailNotificationService _emailNotification;
+    private readonly ISaleRepository _saleRepo;
+    private readonly ICustomerRepository _customerRepo;
 
     public DeliveryService(
         IDeliveryRepository repo,
         IDeliveryManRepository deliveryManRepo,
         INotificationService notificationService,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IEmailNotificationService emailNotification,
+        ISaleRepository saleRepo,
+        ICustomerRepository customerRepo)
     {
         _repo = repo;
         _deliveryManRepo = deliveryManRepo;
         _notificationService = notificationService;
         _currentUser = currentUser;
+        _emailNotification = emailNotification;
+        _saleRepo = saleRepo;
+        _customerRepo = customerRepo;
     }
 
     public Task<PagedResult<DeliveryDto>> GetAllAsync(int page, int pageSize, int? deliveryManId, string? status)
@@ -54,6 +63,13 @@ public class DeliveryService
         if (_currentUser.UserId.HasValue)
             await _notificationService.SendAsync(_currentUser.UserId.Value, "Delivery Created", $"Delivery #{id} has been created.");
 
+        if (request.DeliveryManId.HasValue)
+        {
+            var sale = await _saleRepo.GetByIdAsync(request.SaleId);
+            var deliveryMan = await _deliveryManRepo.GetByIdAsync(request.DeliveryManId.Value);
+            _emailNotification.NotifyDeliveryAssigned(id, sale?.SaleNumber, deliveryMan?.Name);
+        }
+
         return id;
     }
 
@@ -81,6 +97,8 @@ public class DeliveryService
 
         if (_currentUser.UserId.HasValue)
             await _notificationService.SendAsync(_currentUser.UserId.Value, "Delivery Picked Up", $"Delivery #{id} has been picked up.");
+
+        _emailNotification.NotifyDeliveryPickedUp(id, delivery.SaleNumber);
     }
 
     public async Task DeliverAsync(int id, UpdateDeliveryStatusRequest request)
@@ -89,6 +107,7 @@ public class DeliveryService
         if (delivery.Status != nameof(DeliveryStatus.PickedUp) && delivery.Status != nameof(DeliveryStatus.InTransit))
             throw new AppException("Only picked up or in-transit deliveries can be marked as delivered.");
 
+        var deliveredAt = DateTime.UtcNow;
         var entity = new Delivery
         {
             Id = id,
@@ -97,7 +116,7 @@ public class DeliveryService
             Status = DeliveryStatus.Delivered,
             AssignedAt = delivery.AssignedAt,
             PickedUpAt = delivery.PickedUpAt,
-            DeliveredAt = DateTime.UtcNow,
+            DeliveredAt = deliveredAt,
             DeliveryAddress = delivery.DeliveryAddress,
             Notes = request.Notes ?? delivery.Notes,
             UpdatedBy = _currentUser.UserId,
@@ -108,6 +127,17 @@ public class DeliveryService
 
         if (_currentUser.UserId.HasValue)
             await _notificationService.SendAsync(_currentUser.UserId.Value, "Delivery Completed", $"Delivery #{id} has been delivered.");
+
+        // Lookup customer email from the related sale
+        string? customerEmail = null;
+        var sale = await _saleRepo.GetByIdAsync(delivery.SaleId);
+        if (sale?.CustomerId.HasValue == true)
+        {
+            var customer = await _customerRepo.GetByIdAsync(sale.CustomerId.Value);
+            customerEmail = customer?.Email;
+        }
+
+        _emailNotification.NotifyDeliveryCompleted(id, delivery.SaleNumber, customerEmail, deliveredAt);
     }
 
     private async Task<DeliveryDto> GetDeliveryEntity(int id) =>

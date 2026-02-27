@@ -14,19 +14,22 @@ public class PaymentService
     private readonly ICustomerRepository _customerRepo;
     private readonly ISupplierRepository _supplierRepo;
     private readonly ICurrentUserService _currentUser;
+    private readonly IEmailNotificationService _emailNotification;
 
     public PaymentService(
         IPaymentRepository repo,
         ILedgerRepository ledgerRepo,
         ICustomerRepository customerRepo,
         ISupplierRepository supplierRepo,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IEmailNotificationService emailNotification)
     {
         _repo = repo;
         _ledgerRepo = ledgerRepo;
         _customerRepo = customerRepo;
         _supplierRepo = supplierRepo;
         _currentUser = currentUser;
+        _emailNotification = emailNotification;
     }
 
     public Task<PagedResult<PaymentDto>> GetAllAsync(int page, int pageSize, int? customerId, int? supplierId)
@@ -46,7 +49,7 @@ public class PaymentService
         if (request.Amount <= 0)
             throw new ValidationException("Amount", "Amount must be greater than zero.");
 
-        _ = await _customerRepo.GetByIdAsync(request.CustomerId)
+        var customer = await _customerRepo.GetByIdAsync(request.CustomerId)
             ?? throw new NotFoundException("Customer", request.CustomerId);
 
         var paymentMethod = (PaymentMethodLedger)request.PaymentMethod;
@@ -87,6 +90,8 @@ public class PaymentService
         };
         await _ledgerRepo.CreateAsync(ledgerEntry);
 
+        _emailNotification.NotifyPaymentReceived(receiptNumber, customer.FullName, customer.Email, request.Amount, paymentMethod.ToString());
+
         return paymentId;
     }
 
@@ -95,7 +100,7 @@ public class PaymentService
         if (request.Amount <= 0)
             throw new ValidationException("Amount", "Amount must be greater than zero.");
 
-        _ = await _supplierRepo.GetByIdAsync(request.SupplierId)
+        var supplier = await _supplierRepo.GetByIdAsync(request.SupplierId)
             ?? throw new NotFoundException("Supplier", request.SupplierId);
 
         var paymentMethod = (PaymentMethodLedger)request.PaymentMethod;
@@ -136,6 +141,8 @@ public class PaymentService
         };
         await _ledgerRepo.CreateAsync(ledgerEntry);
 
+        _emailNotification.NotifySupplierPaymentMade(receiptNumber, supplier.Name, supplier.Email, request.Amount, paymentMethod.ToString());
+
         return paymentId;
     }
 
@@ -170,6 +177,9 @@ public class PaymentService
         }
 
         await _repo.SoftDeleteAsync(id);
+
+        var entityName = payment.CustomerName ?? payment.SupplierName ?? "Unknown";
+        _emailNotification.NotifyPaymentVoided(payment.ReceiptNumber, entityName, payment.Amount);
     }
 
     private static void ValidatePaymentMethodDetails(PaymentMethodLedger method, string? chequeNumber, string? bankName, DateTime? chequeDate, string? bankRef)

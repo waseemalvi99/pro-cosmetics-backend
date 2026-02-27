@@ -14,19 +14,22 @@ public class CreditDebitNoteService
     private readonly ICustomerRepository _customerRepo;
     private readonly ISupplierRepository _supplierRepo;
     private readonly ICurrentUserService _currentUser;
+    private readonly IEmailNotificationService _emailNotification;
 
     public CreditDebitNoteService(
         ICreditDebitNoteRepository repo,
         ILedgerRepository ledgerRepo,
         ICustomerRepository customerRepo,
         ISupplierRepository supplierRepo,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IEmailNotificationService emailNotification)
     {
         _repo = repo;
         _ledgerRepo = ledgerRepo;
         _customerRepo = customerRepo;
         _supplierRepo = supplierRepo;
         _currentUser = currentUser;
+        _emailNotification = emailNotification;
     }
 
     public Task<PagedResult<CreditDebitNoteDto>> GetAllAsync(int page, int pageSize, int? customerId, int? supplierId)
@@ -51,19 +54,26 @@ public class CreditDebitNoteService
         var noteType = (NoteType)request.NoteType;
         var accountType = (NoteAccountType)request.AccountType;
 
+        string entityName;
+        string? entityEmail = null;
+
         if (accountType == NoteAccountType.Customer)
         {
             if (!request.CustomerId.HasValue)
                 throw new ValidationException("CustomerId", "Customer is required.");
-            _ = await _customerRepo.GetByIdAsync(request.CustomerId.Value)
+            var customer = await _customerRepo.GetByIdAsync(request.CustomerId.Value)
                 ?? throw new NotFoundException("Customer", request.CustomerId.Value);
+            entityName = customer.FullName;
+            entityEmail = customer.Email;
         }
         else
         {
             if (!request.SupplierId.HasValue)
                 throw new ValidationException("SupplierId", "Supplier is required.");
-            _ = await _supplierRepo.GetByIdAsync(request.SupplierId.Value)
+            var supplier = await _supplierRepo.GetByIdAsync(request.SupplierId.Value)
                 ?? throw new NotFoundException("Supplier", request.SupplierId.Value);
+            entityName = supplier.Name;
+            entityEmail = supplier.Email;
         }
 
         var prefix = noteType == NoteType.CreditNote ? "CN" : "DN";
@@ -90,6 +100,11 @@ public class CreditDebitNoteService
         var referenceType = noteType == NoteType.CreditNote ? "CreditNote" : "DebitNote";
         var ledgerEntry = CreateLedgerEntry(noteType, accountType, request, noteId, noteNumber, referenceType);
         await _ledgerRepo.CreateAsync(ledgerEntry);
+
+        if (noteType == NoteType.CreditNote)
+            _emailNotification.NotifyCreditNoteCreated(noteNumber, entityName, entityEmail, request.Amount, request.Reason);
+        else
+            _emailNotification.NotifyDebitNoteCreated(noteNumber, entityName, entityEmail, request.Amount, request.Reason);
 
         return noteId;
     }

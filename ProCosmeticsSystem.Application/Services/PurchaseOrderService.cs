@@ -14,19 +14,22 @@ public class PurchaseOrderService
     private readonly IInventoryRepository _inventoryRepo;
     private readonly ILedgerRepository _ledgerRepo;
     private readonly ICurrentUserService _currentUser;
+    private readonly IEmailNotificationService _emailNotification;
 
     public PurchaseOrderService(
         IPurchaseOrderRepository repo,
         ISupplierRepository supplierRepo,
         IInventoryRepository inventoryRepo,
         ILedgerRepository ledgerRepo,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IEmailNotificationService emailNotification)
     {
         _repo = repo;
         _supplierRepo = supplierRepo;
         _inventoryRepo = inventoryRepo;
         _ledgerRepo = ledgerRepo;
         _currentUser = currentUser;
+        _emailNotification = emailNotification;
     }
 
     public Task<PagedResult<PurchaseOrderDto>> GetAllAsync(int page, int pageSize, int? supplierId)
@@ -102,6 +105,9 @@ public class PurchaseOrderService
         });
 
         await _repo.AddItemsAsync(orderId, items);
+
+        _emailNotification.NotifyPurchaseOrderCreated(orderNumber, supplier.Name, supplier.Email, totalAmount, request.Items.Count);
+
         return orderId;
     }
 
@@ -112,6 +118,9 @@ public class PurchaseOrderService
             throw new AppException("Only draft orders can be submitted.");
 
         await _repo.UpdateStatusAsync(id, (int)PurchaseOrderStatus.Submitted);
+
+        var supplier = await _supplierRepo.GetByIdAsync(order.SupplierId);
+        _emailNotification.NotifyPurchaseOrderSubmitted(order.OrderNumber, order.SupplierName, supplier?.Email, order.TotalAmount);
     }
 
     public async Task ReceiveAsync(int id, ReceivePurchaseOrderRequest request)
@@ -179,6 +188,8 @@ public class PurchaseOrderService
             };
             await _ledgerRepo.CreateAsync(ledgerEntry);
         }
+
+        _emailNotification.NotifyPurchaseOrderReceived(order.OrderNumber, order.SupplierName, receivedAmount, !allFullyReceived);
     }
 
     public async Task CancelAsync(int id)
@@ -190,6 +201,9 @@ public class PurchaseOrderService
             throw new AppException("Cannot cancel a received, closed, or already cancelled order.");
 
         await _repo.UpdateStatusAsync(id, (int)PurchaseOrderStatus.Cancelled);
+
+        var supplier = await _supplierRepo.GetByIdAsync(order.SupplierId);
+        _emailNotification.NotifyPurchaseOrderCancelled(order.OrderNumber, order.SupplierName, supplier?.Email, null);
     }
 
     public async Task CloseAsync(int id, ClosePurchaseOrderRequest request)
@@ -227,5 +241,8 @@ public class PurchaseOrderService
         await _ledgerRepo.CreateAsync(ledgerEntry);
 
         await _repo.CloseAsync(id, request.Reason);
+
+        var supplier = await _supplierRepo.GetByIdAsync(order.SupplierId);
+        _emailNotification.NotifyPurchaseOrderClosed(order.OrderNumber, order.SupplierName, supplier?.Email, request.Reason);
     }
 }

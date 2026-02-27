@@ -124,6 +124,7 @@ app.MapPaymentEndpoints();
 app.MapCreditDebitNoteEndpoints();
 app.MapAccountEndpoints();
 app.MapComboEndpoints();
+app.MapEmailEndpoints();
 
 // SignalR hub
 app.MapHub<NotificationHub>("/hubs/notifications");

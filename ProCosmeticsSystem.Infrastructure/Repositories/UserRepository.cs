@@ -55,4 +55,19 @@ public class UserRepository : IUserRepository
             "SELECT Id, FullName, Email, IsActive, CreatedAt FROM AspNetUsers WHERE Id = @Id",
             new { Id = userId });
     }
+
+    public async Task<List<string>> GetAdminEmailsAsync()
+    {
+        using var conn = _db.CreateConnection();
+        var emails = await conn.QueryAsync<string>(@"
+            SELECT DISTINCT u.Email
+            FROM AspNetUsers u
+            INNER JOIN AspNetUserRoles ur ON ur.UserId = u.Id
+            INNER JOIN AspNetRoles r ON r.Id = ur.RoleId
+            WHERE u.IsActive = 1
+              AND u.Email IS NOT NULL
+              AND u.Email != ''
+              AND r.NormalizedName = 'ADMIN'");
+        return emails.ToList();
+    }
 }

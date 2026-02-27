@@ -15,6 +15,7 @@ public class SaleService
     private readonly ILedgerRepository _ledgerRepo;
     private readonly ICreditDebitNoteRepository _creditDebitNoteRepo;
     private readonly ICurrentUserService _currentUser;
+    private readonly IEmailNotificationService _emailNotification;
 
     public SaleService(
         ISaleRepository repo,
@@ -22,7 +23,8 @@ public class SaleService
         ICustomerRepository customerRepo,
         ILedgerRepository ledgerRepo,
         ICreditDebitNoteRepository creditDebitNoteRepo,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IEmailNotificationService emailNotification)
     {
         _repo = repo;
         _inventoryRepo = inventoryRepo;
@@ -30,6 +32,7 @@ public class SaleService
         _ledgerRepo = ledgerRepo;
         _creditDebitNoteRepo = creditDebitNoteRepo;
         _currentUser = currentUser;
+        _emailNotification = emailNotification;
     }
 
     public Task<PagedResult<SaleDto>> GetAllAsync(int page, int pageSize, int? customerId, int? salesmanId)
@@ -91,23 +94,30 @@ public class SaleService
         // Check credit limit if credit sale with customer
         var paymentMethod = (PaymentMethod)request.PaymentMethod;
         DateTime? dueDate = null;
+        string? customerName = null;
+        string? customerEmail = null;
 
-        if (paymentMethod == PaymentMethod.Credit && request.CustomerId.HasValue)
+        if (request.CustomerId.HasValue)
         {
             var customer = await _customerRepo.GetByIdAsync(request.CustomerId.Value)
                 ?? throw new NotFoundException("Customer", request.CustomerId.Value);
+            customerName = customer.FullName;
+            customerEmail = customer.Email;
 
-            if (customer.CreditLimit > 0)
+            if (paymentMethod == PaymentMethod.Credit)
             {
-                var currentBalance = await _ledgerRepo.GetBalanceAsync(request.CustomerId.Value, null);
-                if (currentBalance + totalAmount > customer.CreditLimit)
-                    throw new ValidationException("CreditLimit",
-                        $"Credit limit exceeded. Limit: {customer.CreditLimit:N2}, Current balance: {currentBalance:N2}, Sale amount: {totalAmount:N2}");
-            }
+                if (customer.CreditLimit > 0)
+                {
+                    var currentBalance = await _ledgerRepo.GetBalanceAsync(request.CustomerId.Value, null);
+                    if (currentBalance + totalAmount > customer.CreditLimit)
+                        throw new ValidationException("CreditLimit",
+                            $"Credit limit exceeded. Limit: {customer.CreditLimit:N2}, Current balance: {currentBalance:N2}, Sale amount: {totalAmount:N2}");
+                }
 
-            dueDate = customer.CreditDays > 0
-                ? DateTime.UtcNow.AddDays(customer.CreditDays)
-                : DateTime.UtcNow.AddDays(30);
+                dueDate = customer.CreditDays > 0
+                    ? DateTime.UtcNow.AddDays(customer.CreditDays)
+                    : DateTime.UtcNow.AddDays(30);
+            }
         }
 
         var sale = new Sale
@@ -173,6 +183,10 @@ public class SaleService
             };
             await _ledgerRepo.CreateAsync(ledgerEntry);
         }
+
+        // Email: notify for credit sales with customer email
+        var emailCustomer = paymentMethod == PaymentMethod.Credit ? customerEmail : null;
+        _emailNotification.NotifySaleCreated(saleNumber, customerName, emailCustomer, totalAmount, paymentMethod.ToString());
 
         return saleId;
     }
@@ -267,6 +281,16 @@ public class SaleService
         var allFullyReturned = saleItems.All(si => si.QuantityReturned >= si.Quantity);
         if (allFullyReturned)
             await _repo.UpdateStatusAsync(id, (int)SaleStatus.Refunded);
+
+        // Lookup customer email for notification
+        string? customerEmail = null;
+        if (sale.CustomerId.HasValue)
+        {
+            var customer = await _customerRepo.GetByIdAsync(sale.CustomerId.Value);
+            customerEmail = customer?.Email;
+        }
+
+        _emailNotification.NotifySaleReturned(sale.SaleNumber, sale.CustomerName, customerEmail, returnAmount, request.Items.Count);
     }
 
     public async Task CancelAsync(int id)
@@ -319,5 +343,7 @@ public class SaleService
         }
 
         await _repo.UpdateStatusAsync(id, (int)SaleStatus.Cancelled);
+
+        _emailNotification.NotifySaleCancelled(sale.SaleNumber, sale.CustomerName, sale.TotalAmount);
     }
 }
