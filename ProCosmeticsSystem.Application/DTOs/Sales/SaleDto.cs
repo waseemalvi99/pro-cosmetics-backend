@@ -17,6 +17,7 @@ public class SaleDto
     public string Status { get; set; } = string.Empty;
     public string? Notes { get; set; }
     public DateTime? DueDate { get; set; }
+    public decimal ReturnedAmount { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<SaleItemDto> Items { get; set; } = [];
 }
@@ -30,6 +31,7 @@ public class SaleItemDto
     public decimal UnitPrice { get; set; }
     public decimal Discount { get; set; }
     public decimal TotalPrice { get; set; }
+    public int QuantityReturned { get; set; }
 }
 
 public class CreateSaleRequest
@@ -41,6 +43,18 @@ public class CreateSaleRequest
     public int PaymentMethod { get; set; }
     public string? Notes { get; set; }
     public List<CreateSaleItemRequest> Items { get; set; } = [];
+}
+
+public class ReturnSaleRequest
+{
+    public string? Reason { get; set; }
+    public List<ReturnSaleItemRequest> Items { get; set; } = [];
+}
+
+public class ReturnSaleItemRequest
+{
+    public int ProductId { get; set; }
+    public int QuantityReturned { get; set; }
 }
 
 public class CreateSaleItemRequest

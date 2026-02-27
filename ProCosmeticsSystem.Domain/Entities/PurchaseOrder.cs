@@ -14,4 +14,6 @@ public class PurchaseOrder : AuditableEntity
     public string? Notes { get; set; }
     public int PaymentTermDays { get; set; }
     public DateTime? DueDate { get; set; }
+    public decimal ReceivedAmount { get; set; }
+    public string? CloseReason { get; set; }
 }

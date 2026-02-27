@@ -17,4 +17,5 @@ public class Sale : AuditableEntity
     public SaleStatus Status { get; set; }
     public string? Notes { get; set; }
     public DateTime? DueDate { get; set; }
+    public decimal ReturnedAmount { get; set; }
 }

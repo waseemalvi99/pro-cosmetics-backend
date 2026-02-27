@@ -9,4 +9,5 @@ public class SaleItem
     public decimal UnitPrice { get; set; }
     public decimal Discount { get; set; }
     public decimal TotalPrice { get; set; }
+    public int QuantityReturned { get; set; }
 }

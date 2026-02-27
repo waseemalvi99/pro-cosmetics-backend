@@ -13,4 +13,6 @@ public interface ISaleRepository
     Task<List<SaleItemDto>> GetItemsAsync(int saleId);
     Task UpdateStatusAsync(int id, int status);
     Task UpdateDueDateAsync(int id, DateTime dueDate);
+    Task UpdateItemReturnedQuantityAsync(int saleId, int productId, int quantityReturned);
+    Task UpdateReturnedAmountAsync(int id, decimal returnedAmount);
 }

@@ -46,5 +46,11 @@ public static class PurchaseOrderEndpoints
             await service.CancelAsync(id);
             return Results.Ok(ApiResponse.Ok("Purchase order cancelled."));
         }).RequirePermission("Purchases:Edit");
+
+        group.MapPut("/{id:int}/close", async (int id, ClosePurchaseOrderRequest request, PurchaseOrderService service) =>
+        {
+            await service.CloseAsync(id, request);
+            return Results.Ok(ApiResponse.Ok("Purchase order closed. Ledger updated with received amount."));
+        }).RequirePermission("Purchases:Close");
     }
 }

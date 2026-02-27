@@ -13,6 +13,7 @@ public class SaleService
     private readonly IInventoryRepository _inventoryRepo;
     private readonly ICustomerRepository _customerRepo;
     private readonly ILedgerRepository _ledgerRepo;
+    private readonly ICreditDebitNoteRepository _creditDebitNoteRepo;
     private readonly ICurrentUserService _currentUser;
 
     public SaleService(
@@ -20,12 +21,14 @@ public class SaleService
         IInventoryRepository inventoryRepo,
         ICustomerRepository customerRepo,
         ILedgerRepository ledgerRepo,
+        ICreditDebitNoteRepository creditDebitNoteRepo,
         ICurrentUserService currentUser)
     {
         _repo = repo;
         _inventoryRepo = inventoryRepo;
         _customerRepo = customerRepo;
         _ledgerRepo = ledgerRepo;
+        _creditDebitNoteRepo = creditDebitNoteRepo;
         _currentUser = currentUser;
     }
 
@@ -174,11 +177,106 @@ public class SaleService
         return saleId;
     }
 
+    public async Task ReturnAsync(int id, ReturnSaleRequest request)
+    {
+        var sale = await _repo.GetByIdAsync(id) ?? throw new NotFoundException("Sale", id);
+        if (sale.Status != nameof(SaleStatus.Completed))
+            throw new AppException("Only completed sales can have returns.");
+
+        if (request.Items.Count == 0)
+            throw new ValidationException("Items", "At least one return item is required.");
+
+        var saleItems = await _repo.GetItemsAsync(id);
+        var returnAmount = 0m;
+
+        foreach (var returnItem in request.Items)
+        {
+            var saleItem = saleItems.FirstOrDefault(si => si.ProductId == returnItem.ProductId)
+                ?? throw new NotFoundException("Sale item for product", returnItem.ProductId);
+
+            if (returnItem.QuantityReturned <= 0)
+                throw new ValidationException("QuantityReturned", "Return quantity must be greater than zero.");
+
+            if (saleItem.QuantityReturned + returnItem.QuantityReturned > saleItem.Quantity)
+                throw new ValidationException("QuantityReturned",
+                    $"Cannot return {returnItem.QuantityReturned} of '{saleItem.ProductName}'. Already returned: {saleItem.QuantityReturned}, sold: {saleItem.Quantity}.");
+
+            var newReturnedQty = saleItem.QuantityReturned + returnItem.QuantityReturned;
+            await _repo.UpdateItemReturnedQuantityAsync(id, returnItem.ProductId, newReturnedQty);
+
+            // Restore inventory
+            await _inventoryRepo.UpdateQuantityAsync(returnItem.ProductId, returnItem.QuantityReturned);
+            await _inventoryRepo.AddTransactionAsync(new InventoryTransaction
+            {
+                ProductId = returnItem.ProductId,
+                TransactionType = InventoryTransactionType.Return,
+                Quantity = returnItem.QuantityReturned,
+                ReferenceType = "SaleReturn",
+                ReferenceId = id,
+                Notes = $"Return from sale {sale.SaleNumber}"
+            });
+
+            // Calculate item return value (proportional discount)
+            var itemReturnValue = (saleItem.UnitPrice * returnItem.QuantityReturned)
+                - (saleItem.Discount * returnItem.QuantityReturned / saleItem.Quantity);
+            returnAmount += itemReturnValue;
+
+            // Update local copy for full-return check
+            saleItem.QuantityReturned = newReturnedQty;
+        }
+
+        var newTotalReturned = sale.ReturnedAmount + returnAmount;
+        await _repo.UpdateReturnedAmountAsync(id, newTotalReturned);
+
+        // Reverse ledger for credit sales
+        if (sale.PaymentMethod == nameof(PaymentMethod.Credit) && sale.CustomerId.HasValue)
+        {
+            await _ledgerRepo.CreateAsync(new LedgerEntry
+            {
+                EntryDate = DateTime.UtcNow,
+                AccountType = LedgerAccountType.CustomerReceivable,
+                CustomerId = sale.CustomerId.Value,
+                ReferenceType = "SaleReturn",
+                ReferenceId = id,
+                Description = $"Return from sale {sale.SaleNumber} ({returnAmount:N2} returned)",
+                DebitAmount = 0,
+                CreditAmount = returnAmount,
+                CreatedBy = _currentUser.UserId
+            });
+        }
+
+        // Auto credit note for sales with a customer
+        if (sale.CustomerId.HasValue)
+        {
+            var noteNumber = $"CN-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
+            await _creditDebitNoteRepo.CreateAsync(new CreditDebitNote
+            {
+                NoteNumber = noteNumber,
+                NoteType = NoteType.CreditNote,
+                AccountType = NoteAccountType.Customer,
+                CustomerId = sale.CustomerId.Value,
+                NoteDate = DateTime.UtcNow,
+                Amount = returnAmount,
+                Reason = request.Reason ?? "Sales return",
+                SaleId = id,
+                CreatedBy = _currentUser.UserId
+            });
+        }
+
+        // Check if fully returned
+        var allFullyReturned = saleItems.All(si => si.QuantityReturned >= si.Quantity);
+        if (allFullyReturned)
+            await _repo.UpdateStatusAsync(id, (int)SaleStatus.Refunded);
+    }
+
     public async Task CancelAsync(int id)
     {
         var sale = await _repo.GetByIdAsync(id) ?? throw new NotFoundException("Sale", id);
         if (sale.Status != nameof(SaleStatus.Completed) && sale.Status != nameof(SaleStatus.Pending))
             throw new AppException("Only completed or pending sales can be cancelled.");
+
+        if (sale.ReturnedAmount > 0)
+            throw new AppException("Cannot cancel a sale with returned items.");
 
         var items = await _repo.GetItemsAsync(id);
 

@@ -34,5 +34,11 @@ public static class SaleEndpoints
             await service.CancelAsync(id);
             return Results.Ok(ApiResponse.Ok("Sale cancelled. Inventory restored."));
         }).RequirePermission("Sales:Edit");
+
+        group.MapPut("/{id:int}/return", async (int id, ReturnSaleRequest request, SaleService service) =>
+        {
+            await service.ReturnAsync(id, request);
+            return Results.Ok(ApiResponse.Ok("Sale return processed. Inventory restored."));
+        }).RequirePermission("Sales:Return");
     }
 }

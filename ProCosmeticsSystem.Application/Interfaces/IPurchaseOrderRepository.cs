@@ -15,4 +15,6 @@ public interface IPurchaseOrderRepository
     Task UpdateTotalAsync(int id, decimal total);
     Task UpdateItemReceivedQuantityAsync(int orderId, int productId, int quantityReceived);
     Task UpdateDueDateAsync(int id, DateTime dueDate);
+    Task UpdateReceivedAmountAsync(int id, decimal receivedAmount);
+    Task CloseAsync(int id, string? closeReason);
 }

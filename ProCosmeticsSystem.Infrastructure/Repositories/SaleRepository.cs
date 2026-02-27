@@ -36,7 +36,7 @@ public class SaleRepository : ISaleRepository
                          WHEN 2 THEN 'Cancelled'
                          WHEN 3 THEN 'Refunded'
                      END AS Status,
-                     s.Notes, s.DueDate, s.CreatedAt
+                     s.Notes, s.DueDate, s.ReturnedAmount, s.CreatedAt
                      FROM Sales s
                      LEFT JOIN Customers c ON s.CustomerId = c.Id
                      LEFT JOIN Salesmen sm ON s.SalesmanId = sm.Id
@@ -68,7 +68,7 @@ public class SaleRepository : ISaleRepository
                   WHEN 2 THEN 'Cancelled'
                   WHEN 3 THEN 'Refunded'
               END AS Status,
-              s.Notes, s.DueDate, s.CreatedAt
+              s.Notes, s.DueDate, s.ReturnedAmount, s.CreatedAt
               FROM Sales s
               LEFT JOIN Customers c ON s.CustomerId = c.Id
               LEFT JOIN Salesmen sm ON s.SalesmanId = sm.Id
@@ -102,7 +102,7 @@ public class SaleRepository : ISaleRepository
     {
         using var conn = _db.CreateConnection();
         var results = await conn.QueryAsync<SaleItemDto>(
-            @"SELECT si.Id, si.ProductId, p.Name AS ProductName, si.Quantity, si.UnitPrice, si.Discount, si.TotalPrice
+            @"SELECT si.Id, si.ProductId, p.Name AS ProductName, si.Quantity, si.UnitPrice, si.Discount, si.TotalPrice, si.QuantityReturned
               FROM SaleItems si
               INNER JOIN Products p ON si.ProductId = p.Id
               WHERE si.SaleId = @SaleId",
@@ -122,5 +122,21 @@ public class SaleRepository : ISaleRepository
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync("UPDATE Sales SET DueDate = @DueDate, UpdatedAt = @UpdatedAt WHERE Id = @Id",
             new { Id = id, DueDate = dueDate, UpdatedAt = DateTime.UtcNow });
+    }
+
+    public async Task UpdateItemReturnedQuantityAsync(int saleId, int productId, int quantityReturned)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            "UPDATE SaleItems SET QuantityReturned = @QuantityReturned WHERE SaleId = @SaleId AND ProductId = @ProductId",
+            new { SaleId = saleId, ProductId = productId, QuantityReturned = quantityReturned });
+    }
+
+    public async Task UpdateReturnedAmountAsync(int id, decimal returnedAmount)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            "UPDATE Sales SET ReturnedAmount = @ReturnedAmount, UpdatedAt = @UpdatedAt WHERE Id = @Id",
+            new { Id = id, ReturnedAmount = returnedAmount, UpdatedAt = DateTime.UtcNow });
     }
 }

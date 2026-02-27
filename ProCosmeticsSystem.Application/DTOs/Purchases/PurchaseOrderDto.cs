@@ -13,6 +13,8 @@ public class PurchaseOrderDto
     public string? Notes { get; set; }
     public int PaymentTermDays { get; set; }
     public DateTime? DueDate { get; set; }
+    public decimal ReceivedAmount { get; set; }
+    public string? CloseReason { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<PurchaseOrderItemDto> Items { get; set; } = [];
 }
@@ -53,4 +55,9 @@ public class ReceiveItemRequest
 {
     public int ProductId { get; set; }
     public int QuantityReceived { get; set; }
+}
+
+public class ClosePurchaseOrderRequest
+{
+    public string? Reason { get; set; }
 }

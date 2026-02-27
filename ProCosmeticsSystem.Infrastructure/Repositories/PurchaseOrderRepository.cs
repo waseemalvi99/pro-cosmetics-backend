@@ -35,8 +35,10 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
                          WHEN 2 THEN 'PartiallyReceived'
                          WHEN 3 THEN 'Received'
                          WHEN 4 THEN 'Cancelled'
+                     WHEN 5 THEN 'Closed'
                      END AS Status,
-                     po.TotalAmount, po.Notes, po.PaymentTermDays, po.DueDate, po.CreatedAt
+                     po.TotalAmount, po.Notes, po.PaymentTermDays, po.DueDate,
+                     po.ReceivedAmount, po.CloseReason, po.CreatedAt
                      FROM PurchaseOrders po
                      INNER JOIN Suppliers s ON po.SupplierId = s.Id
                      {where}
@@ -65,8 +67,10 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
                   WHEN 2 THEN 'PartiallyReceived'
                   WHEN 3 THEN 'Received'
                   WHEN 4 THEN 'Cancelled'
+                  WHEN 5 THEN 'Closed'
               END AS Status,
-              po.TotalAmount, po.Notes, po.PaymentTermDays, po.DueDate, po.CreatedAt
+              po.TotalAmount, po.Notes, po.PaymentTermDays, po.DueDate,
+              po.ReceivedAmount, po.CloseReason, po.CreatedAt
               FROM PurchaseOrders po
               INNER JOIN Suppliers s ON po.SupplierId = s.Id
               WHERE po.Id = @Id",
@@ -135,5 +139,20 @@ public class PurchaseOrderRepository : IPurchaseOrderRepository
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync("UPDATE PurchaseOrders SET DueDate = @DueDate, UpdatedAt = @UpdatedAt WHERE Id = @Id",
             new { Id = id, DueDate = dueDate, UpdatedAt = DateTime.UtcNow });
+    }
+
+    public async Task UpdateReceivedAmountAsync(int id, decimal receivedAmount)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync("UPDATE PurchaseOrders SET ReceivedAmount = @ReceivedAmount, UpdatedAt = @UpdatedAt WHERE Id = @Id",
+            new { Id = id, ReceivedAmount = receivedAmount, UpdatedAt = DateTime.UtcNow });
+    }
+
+    public async Task CloseAsync(int id, string? closeReason)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            "UPDATE PurchaseOrders SET Status = @Status, CloseReason = @CloseReason, UpdatedAt = @UpdatedAt WHERE Id = @Id",
+            new { Id = id, Status = (int)Domain.Enums.PurchaseOrderStatus.Closed, CloseReason = closeReason, UpdatedAt = DateTime.UtcNow });
     }
 }

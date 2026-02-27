@@ -152,6 +152,10 @@ public class PurchaseOrderService
         var newStatus = allFullyReceived ? PurchaseOrderStatus.Received : PurchaseOrderStatus.PartiallyReceived;
         await _repo.UpdateStatusAsync(id, (int)newStatus);
 
+        // Recalculate and persist ReceivedAmount
+        var receivedAmount = orderItems.Sum(i => i.QuantityReceived * i.UnitPrice);
+        await _repo.UpdateReceivedAmountAsync(id, receivedAmount);
+
         // When fully received, set DueDate and create payable ledger entry
         if (allFullyReceived)
         {
@@ -180,9 +184,48 @@ public class PurchaseOrderService
     public async Task CancelAsync(int id)
     {
         var order = await _repo.GetByIdAsync(id) ?? throw new NotFoundException("PurchaseOrder", id);
-        if (order.Status == nameof(PurchaseOrderStatus.Received) || order.Status == nameof(PurchaseOrderStatus.Cancelled))
-            throw new AppException("Cannot cancel a received or already cancelled order.");
+        if (order.Status == nameof(PurchaseOrderStatus.PartiallyReceived))
+            throw new AppException("Cannot cancel a partially received order. Use Close instead to finalize it.");
+        if (order.Status == nameof(PurchaseOrderStatus.Received) || order.Status == nameof(PurchaseOrderStatus.Cancelled) || order.Status == nameof(PurchaseOrderStatus.Closed))
+            throw new AppException("Cannot cancel a received, closed, or already cancelled order.");
 
         await _repo.UpdateStatusAsync(id, (int)PurchaseOrderStatus.Cancelled);
+    }
+
+    public async Task CloseAsync(int id, ClosePurchaseOrderRequest request)
+    {
+        var order = await _repo.GetByIdAsync(id) ?? throw new NotFoundException("PurchaseOrder", id);
+        if (order.Status != nameof(PurchaseOrderStatus.PartiallyReceived))
+            throw new AppException("Only partially received orders can be closed.");
+
+        var orderItems = await _repo.GetItemsAsync(id);
+        var receivedAmount = orderItems.Sum(i => i.QuantityReceived * i.UnitPrice);
+
+        if (receivedAmount <= 0)
+            throw new AppException("Cannot close a purchase order with no received items.");
+
+        await _repo.UpdateReceivedAmountAsync(id, receivedAmount);
+
+        var dueDate = order.PaymentTermDays > 0
+            ? DateTime.UtcNow.AddDays(order.PaymentTermDays)
+            : DateTime.UtcNow.AddDays(30);
+
+        await _repo.UpdateDueDateAsync(id, dueDate);
+
+        var ledgerEntry = new LedgerEntry
+        {
+            EntryDate = DateTime.UtcNow,
+            AccountType = LedgerAccountType.SupplierPayable,
+            SupplierId = order.SupplierId,
+            ReferenceType = "PurchaseOrder",
+            ReferenceId = id,
+            Description = $"Purchase order {order.OrderNumber} closed (partial: {receivedAmount:N2} of {order.TotalAmount:N2})",
+            DebitAmount = 0,
+            CreditAmount = receivedAmount,
+            CreatedBy = _currentUser.UserId
+        };
+        await _ledgerRepo.CreateAsync(ledgerEntry);
+
+        await _repo.CloseAsync(id, request.Reason);
     }
 }
