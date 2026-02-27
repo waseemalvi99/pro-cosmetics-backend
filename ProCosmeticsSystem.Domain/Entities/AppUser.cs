@@ -9,4 +9,5 @@ public class AppUser : IdentityUser<int>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string? RefreshToken { get; set; }
     public DateTime? RefreshTokenExpiryTime { get; set; }
+    public string? ProfilePicture { get; set; }
 }

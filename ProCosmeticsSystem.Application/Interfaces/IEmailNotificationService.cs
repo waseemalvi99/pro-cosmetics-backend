@@ -27,4 +27,8 @@ public interface IEmailNotificationService
     // Credit/Debit Notes
     void NotifyCreditNoteCreated(string noteNumber, string entityName, string? entityEmail, decimal amount, string reason);
     void NotifyDebitNoteCreated(string noteNumber, string entityName, string? entityEmail, decimal amount, string reason);
+
+    // User Notifications
+    void NotifyUserCreated(string fullName, string email, string password);
+    void NotifyPasswordReset(string fullName, string email, string resetToken);
 }

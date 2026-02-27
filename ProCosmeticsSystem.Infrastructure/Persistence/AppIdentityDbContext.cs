@@ -15,6 +15,7 @@ public class AppIdentityDbContext : IdentityDbContext<AppUser, AppRole, int>
         builder.Entity<AppUser>(e =>
         {
             e.Property(u => u.FullName).HasMaxLength(200).IsRequired();
+            e.Property(u => u.ProfilePicture).HasMaxLength(500);
         });
 
         builder.Entity<AppRole>(e =>

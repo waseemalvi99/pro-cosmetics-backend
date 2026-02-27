@@ -215,6 +215,28 @@ public class EmailTemplateService
 </div>
 <p>A debit note has been issued.</p>");
 
+    // ── User Notifications ────────────────────────────────────────────────
+
+    public string WelcomeUser(string fullName, string email, string password, string loginUrl)
+        => Wrap("Welcome to Pro Cosmetics", $@"
+<h2>Welcome, {fullName}!</h2>
+<p>Your account has been created on the Pro Cosmetics ERP system. Below are your login credentials:</p>
+<div class=""detail"">
+  <p><span class=""label"">Email:</span> {email}</p>
+  <p><span class=""label"">Password:</span> {password}</p>
+  <p><span class=""label"">Login URL:</span> <a href=""{loginUrl}"" style=""color:#e94560;"">{loginUrl}</a></p>
+</div>
+<p style=""color:#e94560; font-weight:600;"">Please change your password after your first login for security purposes.</p>");
+
+    public string PasswordResetCode(string fullName, string resetToken)
+        => Wrap("Password Reset Request", $@"
+<h2>Password Reset</h2>
+<p>Hi {fullName}, we received a request to reset your password. Use the code below to reset it:</p>
+<div class=""detail"" style=""text-align:center;"">
+  <p style=""font-size:28px; font-weight:700; letter-spacing:4px; color:#e94560; margin:12px 0;"">{resetToken}</p>
+</div>
+<p>This code will expire shortly. If you did not request a password reset, please ignore this email.</p>");
+
     // ── Custom / Ad-hoc ──────────────────────────────────────────────────
 
     public string CustomEmail(string subject, string body)

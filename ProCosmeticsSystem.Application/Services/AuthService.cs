@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using ProCosmeticsSystem.Application.DTOs.Auth;
 using ProCosmeticsSystem.Application.Exceptions;
@@ -18,17 +19,26 @@ public class AuthService : IAuthService
     private readonly RoleManager<AppRole> _roleManager;
     private readonly IPermissionRepository _permissionRepo;
     private readonly IConfiguration _configuration;
+    private readonly IEmailNotificationService _emailNotification;
+    private readonly IFileStorageService _fileStorage;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         UserManager<AppUser> userManager,
         RoleManager<AppRole> roleManager,
         IPermissionRepository permissionRepo,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IEmailNotificationService emailNotification,
+        IFileStorageService fileStorage,
+        ILogger<AuthService> logger)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _permissionRepo = permissionRepo;
+        _emailNotification = emailNotification;
+        _fileStorage = fileStorage;
         _configuration = configuration;
+        _logger = logger;
     }
 
     public async Task<LoginResponse> LoginAsync(LoginRequest request)
@@ -67,7 +77,8 @@ public class AuthService : IAuthService
                 IsActive = user.IsActive,
                 Roles = roles.ToList(),
                 Permissions = permissions.ToList(),
-                CreatedAt = user.CreatedAt
+                CreatedAt = user.CreatedAt,
+                ProfilePicture = user.ProfilePicture
             }
         };
     }
@@ -78,6 +89,8 @@ public class AuthService : IAuthService
         if (existingUser != null)
             throw new ValidationException("Email", "A user with this email already exists.");
 
+        var password = GenerateRandomPassword();
+
         var user = new AppUser
         {
             FullName = request.FullName,
@@ -86,7 +99,7 @@ public class AuthService : IAuthService
             IsActive = true
         };
 
-        var result = await _userManager.CreateAsync(user, request.Password);
+        var result = await _userManager.CreateAsync(user, password);
         if (!result.Succeeded)
         {
             var errors = result.Errors.GroupBy(e => e.Code)
@@ -103,6 +116,10 @@ public class AuthService : IAuthService
         var roles = await _userManager.GetRolesAsync(user);
         var permissions = await _permissionRepo.GetPermissionNamesByUserIdAsync(user.Id);
 
+        _logger.LogInformation("User {Email} created successfully (Id: {UserId}), sending welcome email with credentials",
+            user.Email, user.Id);
+        _emailNotification.NotifyUserCreated(user.FullName, user.Email!, password);
+
         return new UserDto
         {
             Id = user.Id,
@@ -111,7 +128,8 @@ public class AuthService : IAuthService
             IsActive = user.IsActive,
             Roles = roles.ToList(),
             Permissions = permissions.ToList(),
-            CreatedAt = user.CreatedAt
+            CreatedAt = user.CreatedAt,
+            ProfilePicture = user.ProfilePicture
         };
     }
 
@@ -152,10 +170,135 @@ public class AuthService : IAuthService
                 IsActive = user.IsActive,
                 Roles = roles.ToList(),
                 Permissions = permissions.ToList(),
-                CreatedAt = user.CreatedAt
+                CreatedAt = user.CreatedAt,
+                ProfilePicture = user.ProfilePicture
             }
         };
     }
+
+    // ── Profile Management ─────────────────────────────────────────────
+
+    public async Task<UserDto> GetProfileAsync(int userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new AppException("User not found.", 404);
+
+        var roles = await _userManager.GetRolesAsync(user);
+        var permissions = await _permissionRepo.GetPermissionNamesByUserIdAsync(user.Id);
+
+        return new UserDto
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            Email = user.Email!,
+            IsActive = user.IsActive,
+            Roles = roles.ToList(),
+            Permissions = permissions.ToList(),
+            CreatedAt = user.CreatedAt,
+            ProfilePicture = user.ProfilePicture
+        };
+    }
+
+    public async Task<UserDto> UpdateProfileAsync(int userId, UpdateProfileRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.FullName))
+            throw new ValidationException("FullName", "Full name is required.");
+
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new AppException("User not found.", 404);
+
+        user.FullName = request.FullName.Trim();
+        await _userManager.UpdateAsync(user);
+
+        var roles = await _userManager.GetRolesAsync(user);
+        var permissions = await _permissionRepo.GetPermissionNamesByUserIdAsync(user.Id);
+
+        return new UserDto
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            Email = user.Email!,
+            IsActive = user.IsActive,
+            Roles = roles.ToList(),
+            Permissions = permissions.ToList(),
+            CreatedAt = user.CreatedAt,
+            ProfilePicture = user.ProfilePicture
+        };
+    }
+
+    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new AppException("User not found.", 404);
+
+        var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+            throw new AppException(errors, 400);
+        }
+    }
+
+    public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user == null) return; // Don't leak user existence
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        _emailNotification.NotifyPasswordReset(user.FullName, user.Email!, token);
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email)
+            ?? throw new AppException("User not found.", 404);
+
+        var result = await _userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+            throw new AppException(errors, 400);
+        }
+    }
+
+    public async Task<string> UploadProfilePictureAsync(int userId, Stream imageStream, string fileName)
+    {
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(ext))
+            throw new ValidationException("File", "Only .jpg, .jpeg, .png, .webp images are allowed.");
+
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new AppException("User not found.", 404);
+
+        // Delete old profile picture if exists
+        if (!string.IsNullOrEmpty(user.ProfilePicture))
+        {
+            _fileStorage.DeleteFile($"uploads/profiles/{user.ProfilePicture}");
+        }
+
+        var (savedFileName, _) = await _fileStorage.SaveImageAsync(imageStream, fileName, "profiles", 400, 400, 85);
+
+        user.ProfilePicture = savedFileName;
+        await _userManager.UpdateAsync(user);
+
+        return $"/uploads/profiles/{savedFileName}";
+    }
+
+    public async Task RemoveProfilePictureAsync(int userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId.ToString())
+            ?? throw new AppException("User not found.", 404);
+
+        if (!string.IsNullOrEmpty(user.ProfilePicture))
+        {
+            _fileStorage.DeleteFile($"uploads/profiles/{user.ProfilePicture}");
+            user.ProfilePicture = null;
+            await _userManager.UpdateAsync(user);
+        }
+    }
+
+    // ── Private Helpers ──────────────────────────────────────────────────
 
     private async Task<string> GenerateJwtToken(AppUser user)
     {
@@ -218,5 +361,44 @@ public class AuthService : IAuthService
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomNumber);
         return Convert.ToBase64String(randomNumber);
+    }
+
+    private static string GenerateRandomPassword(int length = 12)
+    {
+        const string upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const string lower = "abcdefghijklmnopqrstuvwxyz";
+        const string digits = "0123456789";
+        const string special = "!@#$%&*";
+        const string all = upper + lower + digits + special;
+
+        using var rng = RandomNumberGenerator.Create();
+        var password = new char[length];
+
+        // Ensure at least one of each category
+        password[0] = Pick(rng, upper);
+        password[1] = Pick(rng, lower);
+        password[2] = Pick(rng, digits);
+        password[3] = Pick(rng, special);
+
+        for (int i = 4; i < length; i++)
+            password[i] = Pick(rng, all);
+
+        // Shuffle to avoid predictable positions
+        var bytes = new byte[length];
+        rng.GetBytes(bytes);
+        for (int i = length - 1; i > 0; i--)
+        {
+            int j = bytes[i] % (i + 1);
+            (password[i], password[j]) = (password[j], password[i]);
+        }
+
+        return new string(password);
+
+        static char Pick(RandomNumberGenerator rng, string chars)
+        {
+            var buf = new byte[1];
+            rng.GetBytes(buf);
+            return chars[buf[0] % chars.Length];
+        }
     }
 }

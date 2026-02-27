@@ -40,11 +40,10 @@ wwwroot/lib/
 # Uncomment the next line if you don't want to track EF migrations:
 # **/Migrations/
 
-# User secrets
+# User secrets / credentials
 secrets.json
+appsettings.json
 appsettings.*.json
-!appsettings.json
-!appsettings.Development.json
 
 # Logs
 logs/

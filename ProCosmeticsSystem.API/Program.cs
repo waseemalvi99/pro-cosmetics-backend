@@ -104,6 +104,7 @@ app.UseAuthorization();
 
 // Map endpoints
 app.MapAuthEndpoints();
+app.MapProfileEndpoints();
 app.MapUserManagementEndpoints();
 app.MapRoleEndpoints();
 app.MapCustomerEndpoints();

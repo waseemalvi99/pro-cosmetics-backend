@@ -26,7 +26,7 @@ public class UserRepository : IUserRepository
         var countSql = $"SELECT COUNT(*) FROM AspNetUsers u {whereClause}";
         var totalCount = await conn.ExecuteScalarAsync<int>(countSql, new { Search = $"%{search}%" });
 
-        var sql = $@"SELECT u.Id, u.FullName, u.Email, u.IsActive, u.CreatedAt
+        var sql = $@"SELECT u.Id, u.FullName, u.Email, u.IsActive, u.CreatedAt, u.ProfilePicture
                      FROM AspNetUsers u
                      {whereClause}
                      ORDER BY u.CreatedAt DESC
@@ -52,7 +52,7 @@ public class UserRepository : IUserRepository
     {
         using var conn = _db.CreateConnection();
         return await conn.QueryFirstOrDefaultAsync<UserDto>(
-            "SELECT Id, FullName, Email, IsActive, CreatedAt FROM AspNetUsers WHERE Id = @Id",
+            "SELECT Id, FullName, Email, IsActive, CreatedAt, ProfilePicture FROM AspNetUsers WHERE Id = @Id",
             new { Id = userId });
     }
 

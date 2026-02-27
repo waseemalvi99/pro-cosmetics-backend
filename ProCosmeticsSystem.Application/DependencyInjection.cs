@@ -35,8 +35,8 @@ public static class DependencyInjection
         services.AddScoped<INotificationService, NotificationService>();
 
         // Email
-        services.AddScoped<EmailTemplateService>();
-        services.AddScoped<IEmailNotificationService, EmailNotificationService>();
+        services.AddSingleton<EmailTemplateService>();
+        services.AddSingleton<IEmailNotificationService, EmailNotificationService>();
 
         return services;
     }

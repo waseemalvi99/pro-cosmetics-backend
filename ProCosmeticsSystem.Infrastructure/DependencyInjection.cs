@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +31,8 @@ public static class DependencyInjection
             options.User.RequireUniqueEmail = true;
         })
         .AddRoles<AppRole>()
-        .AddEntityFrameworkStores<AppIdentityDbContext>();
+        .AddEntityFrameworkStores<AppIdentityDbContext>()
+        .AddDefaultTokenProviders();
 
         // Seeders
         services.AddScoped<DatabaseSeeder>();
@@ -58,7 +60,7 @@ public static class DependencyInjection
         services.AddScoped<IComboRepository, ComboRepository>();
 
         // Services
-        services.AddScoped<IEmailService, EmailService>();
+        services.AddSingleton<IEmailService, EmailService>();
         services.AddScoped<INotificationHubService, NotificationHubService>();
         services.AddScoped<IPdfService, PdfService>();
 

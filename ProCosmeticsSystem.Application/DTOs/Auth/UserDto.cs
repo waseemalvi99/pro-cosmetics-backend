@@ -9,4 +9,5 @@ public class UserDto
     public List<string> Roles { get; set; } = [];
     public List<string> Permissions { get; set; } = [];
     public DateTime CreatedAt { get; set; }
+    public string? ProfilePicture { get; set; }
 }

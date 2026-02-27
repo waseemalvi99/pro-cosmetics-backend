@@ -25,14 +25,17 @@ public class EmailService : IEmailService
 
     public async Task SendAsync(List<string> to, string subject, string body)
     {
+        var recipients = string.Join(", ", to);
         try
         {
+            _logger.LogInformation("Preparing to send email to {To}: {Subject}", recipients, subject);
             var email = BuildMessage(to, subject, body);
             await SendWithRetryAsync(email);
+            _logger.LogInformation("Email sent successfully to {To}: {Subject}", recipients, subject);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send email to {To}", string.Join(", ", to));
+            _logger.LogError(ex, "Failed to send email to {To}: {Subject}", recipients, subject);
         }
     }
 

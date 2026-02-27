@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using ProCosmeticsSystem.API.Middlewares;
 using ProCosmeticsSystem.Application.DTOs.Auth;
@@ -29,6 +30,12 @@ public static class UserManagementEndpoints
             return Results.Ok(ApiResponse<UserDto>.Ok(user));
         }).RequirePermission("UserManagement:View");
 
+        group.MapPost("/register", async (RegisterUserRequest request, IAuthService authService) =>
+        {
+            var result = await authService.RegisterAsync(request);
+            return Results.Ok(ApiResponse<UserDto>.Ok(result, "User created successfully. Credentials sent via email."));
+        }).RequirePermission("UserManagement:Create");
+
         group.MapPost("/{id:int}/assign-role", async (int id, AssignRoleRequest request,
             UserManager<AppUser> userManager, RoleManager<AppRole> roleManager) =>
         {
@@ -45,8 +52,12 @@ public static class UserManagementEndpoints
             return Results.Ok(ApiResponse.Ok("Role assigned successfully."));
         }).RequirePermission("UserManagement:Edit");
 
-        group.MapPut("/{id:int}/toggle-active", async (int id, UserManager<AppUser> userManager) =>
+        group.MapPut("/{id:int}/toggle-active", async (int id, HttpContext httpContext, UserManager<AppUser> userManager) =>
         {
+            var currentUserId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (currentUserId == id.ToString())
+                throw new AppException("You cannot deactivate your own account.", 400);
+
             var user = await userManager.FindByIdAsync(id.ToString())
                 ?? throw new NotFoundException("User", id);
 

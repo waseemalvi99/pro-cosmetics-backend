@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ProCosmeticsSystem.Application.Interfaces;
 
@@ -6,18 +7,18 @@ namespace ProCosmeticsSystem.Application.Services;
 public class EmailNotificationService : IEmailNotificationService
 {
     private readonly IEmailService _emailService;
-    private readonly IUserRepository _userRepo;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly EmailTemplateService _templateService;
     private readonly ILogger<EmailNotificationService> _logger;
 
     public EmailNotificationService(
         IEmailService emailService,
-        IUserRepository userRepo,
+        IServiceScopeFactory scopeFactory,
         EmailTemplateService templateService,
         ILogger<EmailNotificationService> logger)
     {
         _emailService = emailService;
-        _userRepo = userRepo;
+        _scopeFactory = scopeFactory;
         _templateService = templateService;
         _logger = logger;
     }
@@ -128,18 +129,57 @@ public class EmailNotificationService : IEmailNotificationService
         FireAndForget($"Debit Note {noteNumber} Created", html, customerEmail: entityEmail);
     }
 
-    // ── Fire-and-forget helper ───────────────────────────────────────────
+    // ── User Notifications ─────────────────────────────────────────────
 
-    private void FireAndForget(string subject, string html, string? customerEmail = null, string? supplierEmail = null)
+    public void NotifyUserCreated(string fullName, string email, string password)
     {
+        _logger.LogInformation("NotifyUserCreated called for {Email}", email);
+        var html = _templateService.WelcomeUser(fullName, email, password, "https://admin.procosmetics.me");
+        SendDirectEmail(email, "Welcome to Pro Cosmetics", html);
+    }
+
+    public void NotifyPasswordReset(string fullName, string email, string resetToken)
+    {
+        var html = _templateService.PasswordResetCode(fullName, resetToken);
+        SendDirectEmail(email, "Password Reset - Pro Cosmetics", html);
+    }
+
+    // ── Direct email helper (sends only to specified recipient) ──────────
+
+    private void SendDirectEmail(string recipientEmail, string subject, string html)
+    {
+        _logger.LogInformation("SendDirectEmail queued for {Email}: {Subject}", recipientEmail, subject);
         _ = Task.Run(async () =>
         {
             try
             {
+                _logger.LogInformation("SendDirectEmail background task started for {Email}: {Subject}", recipientEmail, subject);
+                await _emailService.SendAsync([recipientEmail], subject, html);
+                _logger.LogInformation("SendDirectEmail background task completed for {Email}: {Subject}", recipientEmail, subject);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send direct email to {Email}: {Subject}", recipientEmail, subject);
+            }
+        });
+    }
+
+    // ── Fire-and-forget helper ───────────────────────────────────────────
+
+    private void FireAndForget(string subject, string html, string? customerEmail = null, string? supplierEmail = null)
+    {
+        _logger.LogInformation("FireAndForget queued: {Subject}", subject);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                _logger.LogInformation("FireAndForget background task started: {Subject}", subject);
                 var recipients = new List<string>();
 
-                // Always include admin emails
-                var adminEmails = await _userRepo.GetAdminEmailsAsync();
+                // Resolve scoped IUserRepository from a new scope
+                using var scope = _scopeFactory.CreateScope();
+                var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+                var adminEmails = await userRepo.GetAdminEmailsAsync();
                 recipients.AddRange(adminEmails);
 
                 // Add customer/supplier email if provided
