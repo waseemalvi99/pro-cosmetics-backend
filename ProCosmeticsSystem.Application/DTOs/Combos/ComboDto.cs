@@ -27,6 +27,7 @@ public class ProductComboDto
     public string SKU { get; set; } = string.Empty;
     public decimal SalePrice { get; set; }
     public int QuantityOnHand { get; set; }
+    public string? ImagePath { get; set; }
 }
 
 public class DeliveryManComboDto

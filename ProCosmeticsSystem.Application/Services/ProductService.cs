@@ -99,4 +99,18 @@ public class ProductService
         _ = await _repo.GetByIdAsync(id) ?? throw new NotFoundException("Product", id);
         await _repo.SoftDeleteAsync(id);
     }
+
+    public async Task<List<BarcodeLabelItem>> GetByIdsForLabelsAsync(List<int> productIds)
+    {
+        if (productIds == null || productIds.Count == 0)
+            throw new ValidationException("ProductIds", "At least one product ID is required.");
+        if (productIds.Count > 100)
+            throw new ValidationException("ProductIds", "Cannot print labels for more than 100 products at once.");
+
+        var items = await _repo.GetByIdsForLabelsAsync(productIds);
+        if (items.Count == 0)
+            throw new NotFoundException("Products", string.Join(", ", productIds));
+
+        return items;
+    }
 }

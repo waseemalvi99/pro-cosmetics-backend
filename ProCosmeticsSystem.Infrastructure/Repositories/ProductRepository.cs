@@ -39,17 +39,37 @@ public class ProductRepository : IProductRepository
                      ORDER BY p.CreatedAt DESC
                      OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
 
-        var items = await conn.QueryAsync<ProductDto>(sql, new
+        var items = (await conn.QueryAsync<ProductDto>(sql, new
         {
             Search = $"%{search}%",
             CategoryId = categoryId,
             Offset = (page - 1) * pageSize,
             PageSize = pageSize
-        });
+        })).ToList();
+
+        if (items.Count > 0)
+        {
+            var productIds = items.Select(p => p.Id).ToList();
+            var images = await conn.QueryAsync<ProductImageDto>(
+                @"SELECT Id, ProductId, FileName, '/uploads/products/' + FilePath AS Url, IsPrimary, SortOrder
+                  FROM ProductImages
+                  WHERE ProductId IN @ProductIds
+                  ORDER BY SortOrder",
+                new { ProductIds = productIds });
+
+            var imagesByProduct = images.GroupBy(i => i.ProductId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var item in items)
+            {
+                if (imagesByProduct.TryGetValue(item.Id, out var productImages))
+                    item.Images = productImages;
+            }
+        }
 
         return new PagedResult<ProductDto>
         {
-            Items = items.ToList(),
+            Items = items,
             TotalCount = totalCount,
             Page = page,
             PageSize = pageSize
@@ -59,7 +79,7 @@ public class ProductRepository : IProductRepository
     public async Task<ProductDto?> GetByIdAsync(int id)
     {
         using var conn = _db.CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<ProductDto>(
+        var product = await conn.QueryFirstOrDefaultAsync<ProductDto>(
             @"SELECT p.Id, p.Name, p.SKU, p.Barcode, p.Description, p.CategoryId, c.Name AS CategoryName,
               p.CostPrice, p.SalePrice, p.ReorderLevel, p.IsActive, p.CreatedAt,
               ISNULL(i.QuantityOnHand, 0) AS QuantityOnHand
@@ -68,18 +88,55 @@ public class ProductRepository : IProductRepository
               LEFT JOIN Inventory i ON p.Id = i.ProductId
               WHERE p.Id = @Id AND p.IsDeleted = 0",
             new { Id = id });
+
+        if (product is not null)
+        {
+            var images = await conn.QueryAsync<ProductImageDto>(
+                @"SELECT Id, ProductId, FileName, '/uploads/products/' + FilePath AS Url, IsPrimary, SortOrder
+                  FROM ProductImages
+                  WHERE ProductId = @Id
+                  ORDER BY SortOrder",
+                new { Id = id });
+            product.Images = images.ToList();
+        }
+
+        return product;
     }
 
     public async Task<BarcodeLookupResult?> GetByBarcodeAsync(string barcode)
     {
         using var conn = _db.CreateConnection();
-        return await conn.QueryFirstOrDefaultAsync<BarcodeLookupResult>(
-            @"SELECT p.Id AS ProductId, p.Name AS ProductName, p.SKU, p.Barcode, p.SalePrice,
+        var product = await conn.QueryFirstOrDefaultAsync<BarcodeLookupResult>(
+            @"SELECT p.Id AS ProductId, p.Name AS ProductName, p.SKU, p.Barcode, p.CostPrice, p.SalePrice,
               ISNULL(i.QuantityOnHand, 0) AS QuantityOnHand
               FROM Products p
               LEFT JOIN Inventory i ON p.Id = i.ProductId
               WHERE p.Barcode = @Barcode AND p.IsDeleted = 0 AND p.IsActive = 1",
             new { Barcode = barcode });
+
+        if (product is not null)
+        {
+            var images = await conn.QueryAsync<ProductImageDto>(
+                @"SELECT Id, ProductId, FileName, '/uploads/products/' + FilePath AS Url, IsPrimary, SortOrder
+                  FROM ProductImages
+                  WHERE ProductId = @ProductId
+                  ORDER BY SortOrder",
+                new { ProductId = product.ProductId });
+            product.Images = images.ToList();
+        }
+
+        return product;
+    }
+
+    public async Task<List<BarcodeLabelItem>> GetByIdsForLabelsAsync(List<int> ids)
+    {
+        using var conn = _db.CreateConnection();
+        var results = await conn.QueryAsync<BarcodeLabelItem>(
+            @"SELECT p.Id AS ProductId, p.Name AS ProductName, p.SKU, p.Barcode, p.SalePrice
+              FROM Products p
+              WHERE p.Id IN @Ids AND p.IsDeleted = 0",
+            new { Ids = ids });
+        return results.ToList();
     }
 
     public async Task<int> CreateAsync(Product product)

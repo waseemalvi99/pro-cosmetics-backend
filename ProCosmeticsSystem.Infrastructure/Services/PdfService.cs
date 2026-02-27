@@ -1,6 +1,7 @@
 using ProCosmeticsSystem.Application.DTOs.Accounts;
 using ProCosmeticsSystem.Application.DTOs.CreditDebitNotes;
 using ProCosmeticsSystem.Application.DTOs.Payments;
+using ProCosmeticsSystem.Application.DTOs.Products;
 using ProCosmeticsSystem.Application.Interfaces;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -263,6 +264,67 @@ public class PdfService : IPdfService
                     t.TotalPages();
                 });
             });
+        });
+
+        return document.GeneratePdf();
+    }
+
+    public byte[] GenerateBarcodeLabelsPdf(List<BarcodeLabelItem> items, IBarcodeService barcodeService)
+    {
+        const int columnsPerRow = 3;
+        const int rowsPerPage = 8;
+        const int labelsPerPage = columnsPerRow * rowsPerPage;
+
+        var document = Document.Create(container =>
+        {
+            var totalPages = (int)Math.Ceiling((double)items.Count / labelsPerPage);
+            if (totalPages == 0) totalPages = 1;
+
+            for (int pageIndex = 0; pageIndex < totalPages; pageIndex++)
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(20);
+                    page.DefaultTextStyle(x => x.FontSize(8));
+
+                    page.Header().Text("Product Barcode Labels").Bold().FontSize(12);
+
+                    page.Content().PaddingTop(5).Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            for (int c = 0; c < columnsPerRow; c++)
+                                columns.RelativeColumn();
+                        });
+
+                        var pageItems = items.Skip(pageIndex * labelsPerPage).Take(labelsPerPage).ToList();
+
+                        foreach (var item in pageItems)
+                        {
+                            table.Cell().Border(0.5f).Padding(5).Column(col =>
+                            {
+                                var barcodeContent = item.Barcode ?? item.SKU ?? item.ProductId.ToString();
+                                var barcodeImage = barcodeService.GenerateBarcodeImage(barcodeContent, 200, 60);
+
+                                col.Item().Text(item.ProductName).SemiBold().FontSize(7).LineHeight(1.1f);
+                                if (!string.IsNullOrEmpty(item.SKU))
+                                    col.Item().Text($"SKU: {item.SKU}").FontSize(6);
+                                col.Item().Text($"Rs. {item.SalePrice:N2}").FontSize(7).SemiBold();
+                                col.Item().PaddingTop(2).AlignCenter().Image(barcodeImage).FitWidth();
+                            });
+                        }
+                    });
+
+                    page.Footer().AlignCenter().Text(t =>
+                    {
+                        t.Span("Page ");
+                        t.CurrentPageNumber();
+                        t.Span(" of ");
+                        t.TotalPages();
+                    });
+                });
+            }
         });
 
         return document.GeneratePdf();

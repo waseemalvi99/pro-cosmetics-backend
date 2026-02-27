@@ -48,6 +48,26 @@ public class PurchaseOrderService
         if (request.Items.Count == 0)
             throw new ValidationException("Items", "At least one item is required.");
 
+        // Validate quantities
+        foreach (var item in request.Items)
+        {
+            if (item.Quantity <= 0)
+                throw new ValidationException("Quantity", "Quantity must be greater than zero.");
+            if (item.UnitPrice < 0)
+                throw new ValidationException("UnitPrice", "Unit price cannot be negative.");
+        }
+
+        // Merge duplicate products (same ProductId) by summing quantities
+        request.Items = request.Items
+            .GroupBy(i => i.ProductId)
+            .Select(g => new CreatePurchaseOrderItemRequest
+            {
+                ProductId = g.Key,
+                Quantity = g.Sum(i => i.Quantity),
+                UnitPrice = g.First().UnitPrice
+            })
+            .ToList();
+
         var supplier = await _supplierRepo.GetByIdAsync(request.SupplierId)
             ?? throw new NotFoundException("Supplier", request.SupplierId);
 

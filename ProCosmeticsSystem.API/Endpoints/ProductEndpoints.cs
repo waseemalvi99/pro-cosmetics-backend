@@ -38,6 +38,13 @@ public static class ProductEndpoints
             return Results.File(image, "image/png", $"barcode-{barcodeContent}.png");
         }).RequirePermission("Products:View");
 
+        group.MapPost("/barcode-labels", async (PrintBarcodesRequest request, ProductService service, IPdfService pdfService, IBarcodeService barcodeService) =>
+        {
+            var items = await service.GetByIdsForLabelsAsync(request.ProductIds);
+            var pdf = pdfService.GenerateBarcodeLabelsPdf(items, barcodeService);
+            return Results.File(pdf, "application/pdf", "barcode-labels.pdf");
+        }).RequirePermission("Products:View");
+
         group.MapPost("/", async (CreateProductRequest request, ProductService service) =>
         {
             var id = await service.CreateAsync(request);

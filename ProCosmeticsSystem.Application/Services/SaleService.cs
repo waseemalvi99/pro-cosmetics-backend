@@ -48,6 +48,29 @@ public class SaleService
         if (request.Items.Count == 0)
             throw new ValidationException("Items", "At least one item is required.");
 
+        // Validate quantities
+        foreach (var item in request.Items)
+        {
+            if (item.Quantity <= 0)
+                throw new ValidationException("Quantity", "Quantity must be greater than zero.");
+            if (item.UnitPrice < 0)
+                throw new ValidationException("UnitPrice", "Unit price cannot be negative.");
+            if (item.Discount < 0)
+                throw new ValidationException("Discount", "Discount cannot be negative.");
+        }
+
+        // Merge duplicate products (same ProductId) by summing quantities and discounts
+        request.Items = request.Items
+            .GroupBy(i => i.ProductId)
+            .Select(g => new CreateSaleItemRequest
+            {
+                ProductId = g.Key,
+                Quantity = g.Sum(i => i.Quantity),
+                UnitPrice = g.First().UnitPrice,
+                Discount = g.Sum(i => i.Discount)
+            })
+            .ToList();
+
         // Check inventory availability
         foreach (var item in request.Items)
         {

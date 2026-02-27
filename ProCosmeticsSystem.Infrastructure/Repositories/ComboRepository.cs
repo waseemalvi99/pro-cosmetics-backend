@@ -45,9 +45,11 @@ public class ComboRepository : IComboRepository
         using var conn = _db.CreateConnection();
         var results = await conn.QueryAsync<ProductComboDto>(
             @"SELECT TOP(@Limit) p.Id, p.Name, p.SKU, p.SalePrice,
-                     ISNULL(i.QuantityOnHand, 0) AS QuantityOnHand
+                     ISNULL(i.QuantityOnHand, 0) AS QuantityOnHand,
+                     '/uploads/products/' + pi.FilePath AS ImagePath
               FROM Products p
               LEFT JOIN Inventory i ON p.Id = i.ProductId
+              LEFT JOIN ProductImages pi ON p.Id = pi.ProductId AND pi.IsPrimary = 1
               WHERE p.IsDeleted = 0 AND p.IsActive = 1
                 AND (@Search IS NULL OR p.Name LIKE @Search OR p.SKU LIKE @Search)
               ORDER BY p.Name",

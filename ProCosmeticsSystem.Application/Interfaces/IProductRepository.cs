@@ -9,6 +9,7 @@ public interface IProductRepository
     Task<PagedResult<ProductDto>> GetAllAsync(int page, int pageSize, string? search, int? categoryId);
     Task<ProductDto?> GetByIdAsync(int id);
     Task<BarcodeLookupResult?> GetByBarcodeAsync(string barcode);
+    Task<List<BarcodeLabelItem>> GetByIdsForLabelsAsync(List<int> ids);
     Task<int> CreateAsync(Product product);
     Task UpdateAsync(Product product);
     Task SoftDeleteAsync(int id);
