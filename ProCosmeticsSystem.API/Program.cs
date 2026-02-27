@@ -69,7 +69,7 @@ builder.Services.AddCors(options =>
     });
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5173", "https://admin.procosmetics.me")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -123,6 +123,7 @@ app.MapLedgerEndpoints();
 app.MapPaymentEndpoints();
 app.MapCreditDebitNoteEndpoints();
 app.MapAccountEndpoints();
+app.MapComboEndpoints();
 
 // SignalR hub
 app.MapHub<NotificationHub>("/hubs/notifications");
