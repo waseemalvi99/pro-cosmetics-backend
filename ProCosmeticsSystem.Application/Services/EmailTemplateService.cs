@@ -233,7 +233,7 @@ public class EmailTemplateService
 <h2>Password Reset</h2>
 <p>Hi {fullName}, we received a request to reset your password. Use the code below to reset it:</p>
 <div class=""detail"" style=""text-align:center;"">
-  <p style=""font-size:28px; font-weight:700; letter-spacing:4px; color:#e94560; margin:12px 0;"">{resetToken}</p>
+  <p style=""font-size:28px; font-weight:700; letter-spacing:4px; color:#e94560; margin:12px 0; word-break:break-all;"">{resetToken}</p>
 </div>
 <p>This code will expire shortly. If you did not request a password reset, please ignore this email.</p>");
 
