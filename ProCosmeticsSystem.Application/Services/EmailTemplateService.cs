@@ -231,9 +231,9 @@ public class EmailTemplateService
     public string PasswordResetCode(string fullName, string resetToken)
         => Wrap("Password Reset Request", $@"
 <h2>Password Reset</h2>
-<p>Hi {fullName}, we received a request to reset your password. Use the code below to reset it:</p>
-<div class=""detail"" style=""text-align:center;"">
-  <p style=""font-size:28px; font-weight:700; letter-spacing:4px; color:#e94560; margin:12px 0; word-break:break-all;"">{resetToken}</p>
+<p>Hi {fullName}, we received a request to reset your password. Copy the code below and paste it in the reset form:</p>
+<div style=""background:#1a1a2e; border-radius:6px; padding:16px; margin:16px 0; text-align:center;"">
+  <p style=""font-family:'Courier New',Courier,monospace; font-size:13px; color:#f0f0f0; margin:0; word-break:break-all; line-height:1.6;"">{resetToken}</p>
 </div>
 <p>This code will expire shortly. If you did not request a password reset, please ignore this email.</p>");
 
